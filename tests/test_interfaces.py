@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +50,22 @@ def test_help_does_not_create_database(tmp_path: Path) -> None:
     result = run_cli("--db", str(db), "--help")
     assert result.returncode == 0
     assert not db.exists()
+
+
+def test_cli_json_works_through_non_utf8_pipe(tmp_path: Path) -> None:
+    db = str(tmp_path / "index.db")
+    assert run_cli("--db", db, "import", str(EXAMPLE)).returncode == 0
+    result = subprocess.run(
+        [sys.executable, "-m", "continuum_history", "--db", db, "search", "数据库锁"],
+        env={**os.environ, "PYTHONIOENCODING": "ascii"},
+        capture_output=True,
+        text=True,
+        encoding="ascii",
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "数据库锁" in json.loads(result.stdout)["items"][0]["preview"]
 
 
 def test_invalid_import_does_not_create_database_or_echo_contents(tmp_path: Path) -> None:

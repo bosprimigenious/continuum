@@ -66,7 +66,8 @@ def main() -> int:
                 return 0
             case _:
                 raise AssertionError("unreachable argparse command")
-        print(json.dumps(result, ensure_ascii=False))
+        # Machine-readable JSON must survive non-UTF-8 redirected Windows/legacy terminals.
+        print(json.dumps(result, ensure_ascii=True))
         return 0
     except (HistoryError, OSError, sqlite3.Error) as exc:
         # Do not include a user's paths or database error values in default output.
