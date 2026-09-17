@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -99,4 +100,45 @@ def test_nul_in_message_is_rejected_instead_of_silent_search_truncation(tmp_path
     path = tmp_path / "nul.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(HistoryError, match="invalid_snapshot"):
+        load_snapshot(path)
+
+
+def test_stat_and_fstat_precision_difference_is_not_a_source_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = os.fstat
+
+    def coarse_handle_stat(fd: int) -> SimpleNamespace:
+        stat = original(fd)
+        return SimpleNamespace(
+            st_dev=stat.st_dev,
+            st_ino=stat.st_ino,
+            st_size=stat.st_size,
+            st_mtime_ns=stat.st_mtime_ns // 1_000_000_000 * 1_000_000_000,
+            st_ctime_ns=stat.st_ctime_ns // 1_000_000_000 * 1_000_000_000,
+        )
+
+    monkeypatch.setattr(os, "fstat", coarse_handle_stat)
+    assert load_snapshot(EXAMPLE).source_id == "synthetic-demo"
+
+
+def test_source_change_during_capture_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "changing.json"
+    path.write_bytes(EXAMPLE.read_bytes())
+    original = os.fstat
+    calls = 0
+
+    def changing_stat(fd: int) -> os.stat_result:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            with path.open("ab") as writer:
+                writer.write(b" ")
+        return original(fd)
+
+    monkeypatch.setattr(os, "fstat", changing_stat)
+    with pytest.raises(HistoryError, match="source_changed"):
         load_snapshot(path)
