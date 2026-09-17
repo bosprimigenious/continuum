@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "continuum-history"
+version = "0.1.0.dev0"
+description = "Local-first conversation history for humans and coding agents"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{name = "Continuum contributors"}]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development",
+]
+dependencies = ["mcp>=2,<3", "pydantic>=2.11,<3"]
+
+[project.urls]
+Repository = "https://github.com/bosprimigenious/continuum"
+Issues = "https://github.com/bosprimigenious/continuum/issues"
+
+[project.scripts]
+continuum = "continuum_history.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-cov>=7,<8", "ruff>=0.11,<1", "mypy>=1.15,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/continuum_history"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[tool.coverage.run]
+source = ["continuum_history"]
+patch = ["subprocess"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 85

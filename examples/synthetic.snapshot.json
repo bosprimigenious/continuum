@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "source_id": "synthetic-demo",
+  "sessions": [
+    {
+      "native_id": "database-discussion",
+      "title": "Synthetic example: SQLite concurrency",
+      "project": "example-project",
+      "events": [
+        {"native_id": "message-1", "role": "user", "text": "How do we investigate a SQLite 数据库锁?"},
+        {"native_id": "message-2", "role": "assistant", "text": "Inspect the transaction boundaries and WAL mode. This is synthetic demonstration data, not a real conversation."},
+        {"native_id": "message-3", "role": "user", "text": "Keep the original history read-only. 保留原文和出处。"}
+      ]
+    }
+  ]
+}
