@@ -25,6 +25,7 @@ class CoverageIssue(Record):
         "unusable_timestamp",
         "illegal_identity",
         "unrecognized_version",
+        "orphaned_bubble",
     ]
     native_session_id: Identifier | None = None
     native_event_id: Identifier | None = None

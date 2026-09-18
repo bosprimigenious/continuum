@@ -36,6 +36,7 @@ IssueCode = Literal[
     "unusable_timestamp",
     "illegal_identity",
     "unrecognized_version",
+    "orphaned_bubble",
 ]
 # Versions seen in the locked synthetic fixture, not a vendor compatibility matrix.
 KNOWN_COMPOSER_VERSIONS = frozenset({13})
@@ -146,6 +147,7 @@ def _parse_bubble(
     seen_ids: set[str],
     issues: list[CoverageIssue],
     bubble_versions: list[int],
+    referenced: set[tuple[str, str]],
 ) -> Event | None:
     if not isinstance(header, dict):
         issues.append(_issue("malformed_record", composer_id))
@@ -154,6 +156,7 @@ def _parse_bubble(
     if not isinstance(bubble_id, str) or not bubble_id:
         issues.append(_issue("malformed_record", composer_id))
         return None
+    referenced.add((composer_id, bubble_id))
     if not _legal_native_id(bubble_id):
         issues.append(_issue("illegal_identity", composer_id, bubble_id))
         return None
@@ -212,6 +215,7 @@ def _parse_composer(
     issues: list[CoverageIssue],
     composer_versions: list[int],
     bubble_versions: list[int],
+    referenced: set[tuple[str, str]],
 ) -> Session | None:
     composer_id = key.split(":", 1)[1]
     if not composer_id:
@@ -241,7 +245,7 @@ def _parse_composer(
     events: list[Event] = []
     seen: set[str] = set()
     for header in headers:
-        event = _parse_bubble(db, composer_id, header, seen, issues, bubble_versions)
+        event = _parse_bubble(db, composer_id, header, seen, issues, bubble_versions, referenced)
         if event is not None:
             events.append(event)
     worktree = data.get("gitWorktree")
@@ -269,6 +273,27 @@ def _parse_composer(
         return None
 
 
+def _note_orphaned_bubbles(
+    db: sqlite3.Connection,
+    referenced: set[tuple[str, str]],
+    issues: list[CoverageIssue],
+) -> None:
+    rows = db.execute(
+        "SELECT key FROM cursorDiskKV WHERE key LIKE 'bubbleId:%' ORDER BY key"
+    ).fetchall()
+    for (key,) in rows:
+        if not isinstance(key, str):
+            issues.append(_issue("orphaned_bubble"))
+            continue
+        parts = key.split(":", 2)
+        if len(parts) != 3 or not parts[1] or not parts[2]:
+            issues.append(_issue("orphaned_bubble"))
+            continue
+        composer_id, bubble_id = parts[1], parts[2]
+        if (composer_id, bubble_id) not in referenced:
+            issues.append(_issue("orphaned_bubble", composer_id, bubble_id))
+
+
 def load_cursor_state_vscdb(path: Path, *, source_id: str) -> Snapshot:
     """Read one explicitly selected Cursor state.vscdb without modifying it."""
     source = path.expanduser()
@@ -279,6 +304,7 @@ def load_cursor_state_vscdb(path: Path, *, source_id: str) -> Snapshot:
     bubble_versions: list[int] = []
     sessions_seen = 0
     events_seen = 0
+    referenced: set[tuple[str, str]] = set()
     try:
         with _with_stable_copy(source) as readable, connect_readonly(readable) as db:
             tables = {
@@ -298,10 +324,11 @@ def load_cursor_state_vscdb(path: Path, *, source_id: str) -> Snapshot:
                 if isinstance(headers, list):
                     events_seen += len(headers)
                 session = _parse_composer(
-                    db, key, value, issues, composer_versions, bubble_versions
+                    db, key, value, issues, composer_versions, bubble_versions, referenced
                 )
                 if session is not None:
                     sessions.append(session)
+            _note_orphaned_bubbles(db, referenced, issues)
     except HistoryError:
         raise
     except sqlite3.Error as exc:

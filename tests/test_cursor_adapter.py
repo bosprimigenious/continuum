@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import subprocess
 import sys
@@ -572,3 +573,146 @@ def test_readonly_load_does_not_checkpoint_or_rewrite_wal_sidecars(tmp_path: Pat
             assert shm.read_bytes() == before_shm
     finally:
         writer.close()
+
+
+def test_wrong_type_headers_are_not_a_complete_empty_session(tmp_path: Path) -> None:
+    path = tmp_path / "state.vscdb"
+    write_state_vscdb(
+        path,
+        composers=[
+            (
+                COMPOSER_A,
+                {
+                    "_v": 13,
+                    "composerId": COMPOSER_A,
+                    "name": "typed-wrong",
+                    "fullConversationHeadersOnly": {"bubbleId": BUBBLE_USER},
+                },
+            )
+        ],
+        bubbles=[(COMPOSER_A, BUBBLE_USER, bubble_payload(1, KNOWN_USER_TEXT))],
+    ).close()
+    snapshot = load_cursor(path)
+    assert snapshot.sessions == ()
+    assert snapshot.coverage is not None
+    assert snapshot.coverage.complete is False
+    assert "invalid_composer" in {issue.code for issue in snapshot.coverage.issues}
+    with pytest.raises(HistoryError, match="incomplete_source"):
+        HistoryStore(tmp_path / "index.sqlite3").replace_source(snapshot)
+
+
+def test_non_object_header_entry_is_malformed_and_blocking(tmp_path: Path) -> None:
+    path = tmp_path / "state.vscdb"
+    write_state_vscdb(
+        path,
+        composers=[
+            (
+                COMPOSER_A,
+                composer_payload(COMPOSER_A, [BUBBLE_USER]),  # type: ignore[list-item]
+            )
+        ],
+        bubbles=[(COMPOSER_A, BUBBLE_USER, bubble_payload(1, KNOWN_USER_TEXT))],
+    ).close()
+    snapshot = load_cursor(path)
+    assert snapshot.coverage is not None
+    assert snapshot.coverage.complete is False
+    assert "malformed_record" in {issue.code for issue in snapshot.coverage.issues}
+    texts = [event.text for session in snapshot.sessions for event in session.events]
+    assert KNOWN_USER_TEXT not in texts
+    with pytest.raises(HistoryError, match="incomplete_source"):
+        HistoryStore(tmp_path / "index.sqlite3").replace_source(snapshot)
+
+
+def test_orphaned_bubbles_are_diagnosed_not_imported(tmp_path: Path) -> None:
+    path = tmp_path / "state.vscdb"
+    orphan = "00000000-0000-4000-8000-0000000000ff"
+    write_state_vscdb(
+        path,
+        composers=[
+            (
+                COMPOSER_A,
+                composer_payload(COMPOSER_A, [{"bubbleId": BUBBLE_USER, "type": 1}]),
+            )
+        ],
+        bubbles=[
+            (COMPOSER_A, BUBBLE_USER, bubble_payload(1, KNOWN_USER_TEXT)),
+            (COMPOSER_A, orphan, bubble_payload(1, PRIVATE_SENTINEL)),
+        ],
+    ).close()
+    snapshot = load_cursor(path)
+    assert [event.native_id for event in snapshot.sessions[0].events] == [BUBBLE_USER]
+    assert snapshot.sessions[0].events[0].text == KNOWN_USER_TEXT
+    assert PRIVATE_SENTINEL not in snapshot.model_dump_json()
+    assert snapshot.coverage is not None
+    assert snapshot.coverage.complete is False
+    assert "orphaned_bubble" in {issue.code for issue in snapshot.coverage.issues}
+    result = HistoryStore(tmp_path / "index.sqlite3").replace_source(snapshot)
+    assert result["changed"] is True
+    assert result["event_count"] == 1
+
+
+def test_cli_incomplete_source_leaves_existing_index(tmp_path: Path) -> None:
+    good = tmp_path / "good.vscdb"
+    bad = tmp_path / "bad.vscdb"
+    db = tmp_path / "index.sqlite3"
+    supported_conversation(good).close()
+    write_state_vscdb(
+        bad,
+        composers=[(COMPOSER_A, {"_v": 999, "composerId": COMPOSER_A, "name": "x"})],
+        bubbles=[],
+    ).close()
+    first = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "continuum_history",
+            "--db",
+            str(db),
+            "import",
+            "--adapter",
+            "cursor-state-vscdb",
+            "--source-id",
+            "cursor-demo",
+            str(good),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=20,
+        check=False,
+    )
+    assert first.returncode == 0, first.stderr
+    failed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "continuum_history",
+            "--db",
+            str(db),
+            "import",
+            "--adapter",
+            "cursor-state-vscdb",
+            "--source-id",
+            "cursor-demo",
+            str(bad),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=20,
+        check=False,
+    )
+    assert failed.returncode == 2
+    assert "incomplete_source" in failed.stderr
+    listed = subprocess.run(
+        [sys.executable, "-m", "continuum_history", "--db", str(db), "search", "数据库锁"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=20,
+        check=False,
+    )
+    assert listed.returncode == 0, listed.stderr
+    items = json.loads(listed.stdout)["items"]
+    assert items
+    assert items[0]["preview"].startswith("How do we investigate")
