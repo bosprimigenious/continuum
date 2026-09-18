@@ -17,10 +17,12 @@ with zipfile.ZipFile(wheel) as archive:
     assert not any(".sqlite" in name or ".env" in name for name in names)
 
 code = """
-import importlib.metadata, json, pathlib, subprocess, sys
+import importlib.metadata, json, shutil, subprocess, sys
 import continuum_history
 assert 'site-packages' in str(continuum_history.__file__)
-base = [sys.executable, '-I', '-m', 'continuum_history', '--db', 'wheel-demo.db']
+cli = shutil.which('continuum')
+assert cli, 'continuum console script missing from isolated install'
+base = [cli, '--db', 'wheel-demo.db']
 def run(*args):
     result = subprocess.run(base + list(args), check=True, capture_output=True, text=True,
                             encoding='utf-8', timeout=20)
@@ -30,6 +32,7 @@ assert run('import', sys.argv[1])['changed'] is False
 hit = run('search', '数据库锁')['items'][0]
 assert len(run('read', hit['session_id'])['items']) == 3
 print('PASS: installed wheel', importlib.metadata.version('continuum-history'))
+print('PASS: continuum CLI', cli)
 """
 with tempfile.TemporaryDirectory(prefix="continuum-wheel-") as temporary:
     subprocess.run(
