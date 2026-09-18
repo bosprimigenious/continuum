@@ -19,3 +19,5 @@ build/
 .continuum/
 private/
 reports/local/
+node_modules/
+gui/dist/

@@ -26,7 +26,8 @@ to another agent through MCP—without rewriting a vendor's conversation databas
 | --- | --- |
 | Versioned normalized snapshot contract and synthetic example | Claude Code / Codex adapters; Cursor JSONL transcripts |
 | Atomic SQLite imports, literal Unicode search, source references | Automatic discovery and background incremental updates |
-| Version-bound pagination and explicit errors | GUI / desktop installer |
+| Version-bound pagination and explicit errors | Desktop installer / Tauri |
+| CLI-backed GUI session and Vite shell (pytest only) | Browser e2e, live GUI host |
 | CLI and four read-only stdio MCP tools sharing one core | Fine-grained client permissions and attachment reading |
 | Cursor IDE `state.vscdb` read-only import (synthetic fixtures) | Live Cursor host verification |
 | Unit, rollback, CLI and real stdio protocol tests; CI | Cross-agent execution, cloud sync, semantic search |
@@ -121,13 +122,14 @@ agent may be sent to that agent's model provider, even though Continuum has no u
 ```text
 Source adapters → normalized snapshots → local history core → CLI
                                              │             → MCP (stdio)
-                                         SQLite / FTS5     → GUI (planned)
+                                         SQLite / FTS5     → GUI (CLI JSON; Vite shell)
 ```
 
 - **Core:** Python 3.12+, Pydantic v2 contracts, SQLite + FTS5, official MCP Python SDK v2.
 - **Tooling:** uv and a committed lockfile; pytest, Ruff, mypy; GitHub Actions.
-- **GUI direction:** React + TypeScript + Vite, followed by a Tauri 2 desktop shell.
-  These are planned decisions, not installed dependencies or implemented applications.
+- **GUI:** React + TypeScript + Vite talks to the index through the `continuum` CLI JSON
+  interface (`continuum_history.gui`). Run `npm install && npm run dev` in `gui/` from a
+  checkout. Browser end-to-end tests and Tauri are **not** implemented.
 - **Deployment:** one local modular application. No account, cloud database, vector service,
   model download or LLM API is needed for the current demo.
 

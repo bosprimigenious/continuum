@@ -13,9 +13,10 @@
 
 已实现：规范化快照 v1、SQLite 原子导入、全文/短中文检索、来源引用、版本绑定分页、
 CLI、4 个只读 MCP 工具、失败回滚测试、真实 stdio 协议测试、构建与 CI、
-Cursor IDE `state.vscdb` 只读导入（合成夹具；未做真实宿主验收）。
+Cursor IDE `state.vscdb` 只读导入（合成夹具；未做真实宿主验收）、
+以 CLI JSON 为底座的 GUI 会话和 Vite 壳（pytest；未做浏览器端到端）。
 
-未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、GUI、
+未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、浏览器端到端 GUI、
 桌面安装包、细粒度客户端权限、附件读取、跨 Agent 执行。
 
 仓库只有人工编写的合成示例，没有私人对话、旧归档、本机配置或凭据。
@@ -72,10 +73,10 @@ uv run continuum --db .continuum/demo.sqlite3 serve
 
 - 当前：Python 3.12+、uv、Pydantic v2、SQLite/FTS5、官方 MCP SDK v2。
 - 质量：pytest、Ruff、mypy、锁定依赖、GitHub Actions。
-- GUI 方向：React / TypeScript / Vite；桌面壳选 Tauri 2，先验证 Python 核心打包。
+- GUI：React / TypeScript / Vite，经 `continuum` CLI JSON 访问索引；桌面壳仍是 Tauri 2，未开工。
 - 架构：模块化单体，一个核心、多种入口；不引入云账号、向量数据库或执行调度服务。
 
-GUI 栈目前是架构选择，尚未安装依赖或生成空壳。先把读取链路做可靠。
+在仓库 `gui/` 目录 `npm install && npm run dev`。这不是桌面安装包，也不在 foundation gate 里跑。
 
 ## 开发与完成标准
 

@@ -1,17 +1,19 @@
 # Architecture decision 001: local core, multiple clients
 
-Status: accepted for the foundation. GUI choices are a planned direction, gated by packaging tests.
+Status: accepted for the foundation. GUI transport was validated in P5-a as CLI subprocess JSON.
 
 ## Boundaries
 
 `adapters` validate source-format data into `models.Snapshot`. `store.HistoryStore` owns
 index transactions and queries. `cli` performs explicit user-initiated imports; `mcp_server`
-only queries an index chosen when launching the process. Future GUI handlers must use this same
-core, not implement their own parsers, database or search logic.
+only queries an index chosen when launching the process. GUI handlers use this same core
+through the `continuum` CLI, not their own parsers, database or search logic.
 
-There is one Python distribution, not a service mesh. No background daemon or HTTP listener
-is needed for the current snapshot workflow. New MCP connections may be separate processes;
-operation-scoped SQLite connections avoid sharing one connection across worker threads.
+There is one Python distribution, not a service mesh. No Continuum HTTP API or background
+daemon is part of the snapshot workflow. The Vite `npm run dev` host may spawn that CLI
+for the browser shell; it is not a second search service. New MCP connections may be
+separate processes; operation-scoped SQLite connections avoid sharing one connection across
+worker threads.
 
 ## Stack and rejected alternatives
 
@@ -21,8 +23,8 @@ operation-scoped SQLite connections avoid sharing one connection across worker t
 | Contracts | Pydantic v2 | One validated model for fixtures and imports; extra fields and duplicate identities fail visibly |
 | Storage | stdlib SQLite, WAL, FTS5 trigram | Transactional and rebuildable without another service; short queries scan and large-corpus performance is unmeasured |
 | Agent interface | Official MCP Python SDK v2, stdio | Delegate protocol/version negotiation; do not hand-roll JSON-RPC or blindly echo versions |
-| Human interface | Planned React + TypeScript + Vite | A conventional web UI for search and reading; no GUI code in this foundation |
-| Desktop shell | Planned Tauri 2 + Python sidecar | Native wrapper without rewriting the core; signing, updater, process lifecycle and packaging are unverified |
+| Human interface | React + TypeScript + Vite over CLI JSON | Search/read UI; `continuum_history.gui.CliBridge` subprocesses `python -m continuum_history`. Browser e2e unverified |
+| Desktop shell | Planned Tauri 2 + Python sidecar | Not started (P6). Do not add Electron in parallel |
 | Checks | pytest / Ruff / strict mypy / GitHub Actions | One executable aggregate gate instead of manual green checkmarks |
 
 Do not add Rust to the core, an ORM, a vector database, cloud auth or a workflow engine now.
@@ -63,7 +65,8 @@ identify events in the current snapshot; no historical version archive is kept.
 An import validates everything before a write transaction. Blocking native coverage
 (`unknown_shape`, `illegal_identity`, `malformed_record`, `missing_bubble`, `duplicate_event`,
 `invalid_composer`) raises `incomplete_source` and does not replace the previous index.
-Unsupported tool/thinking blocks are not blocking. Unchanged canonical snapshots are no-ops.
+Unsupported tool/thinking blocks and extra `bubbleId` rows not listed in headers
+(`orphaned_bubble`) are not blocking. Unchanged canonical snapshots are no-ops.
 Any database failure rolls back the replacement. A failed import leaves the previous successful
 snapshot; the CLI exits nonzero, does not create a new empty `--db` for a blocked native import,
 and does not claim a new successful indexing time.
@@ -91,6 +94,17 @@ The current MCP server exposes the whole selected index. Per-project authorizati
 implemented in the shared service before supporting different permissions inside one index.
 Do not describe the current exact filters as authorization.
 
+## GUI bridge (P5-a)
+
+Validated transport: subprocess to the existing CLI. The child argv is
+`python -m continuum_history --db INDEX COMMAND...` (the same interface as the `continuum`
+console script). Success is JSON on stdout; domain failures are JSON `{"error": ...}` on
+stderr with exit 2. `continuum_history.gui` must not import `store` or `adapters`.
+Allowed GUI commands are `import`, `sources`, `list`, `search`, and `read` — never `serve`.
+The Vite `/__continuum` POST endpoint exists only while `npm run dev` is running and spawns
+that same CLI; Continuum does not ship an HTTP search server. Empty UI state must not create
+an index or walk the home directory. Tauri is P6 and is not this bridge.
+
 ## Migration and deletion
 
 No vendor database writes, source deletion, automatic cleanup or side-bar imports.
@@ -109,6 +123,7 @@ create a new path, reimport, then retarget CLI/MCP `--db`.
 ## Deliberately deferred
 
 Native source discovery, live Cursor/host verification, agent-transcripts JSONL, Claude Code
-and Codex readers, content-block and media coverage, GUI, task continuity and managed
-execution. The source adapter and consumer compatibility matrices are independent. A working
-MCP client does not prove that client's native history format can be read on a live host.
+and Codex readers, content-block and media coverage, GUI browser e2e, Tauri packaging, task
+continuity and managed execution. The source adapter and consumer compatibility matrices are
+independent. A working MCP client does not prove that client's native history format can be
+read on a live host. A green GUI pytest suite does not prove the Vite shell in a browser.

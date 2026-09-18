@@ -31,9 +31,10 @@ without importing the source checkout. Tests must never discover the developer's
 以当前源码和亲自运行的结果为准，历史报告不替代复验。
 
 接下来的开发请求应直接检查和修改代码，不要只输出计划（用户明确要求制订计划时除外）。
-唯一当前里程碑是下文的 **一个 Cursor 原生只读路径**；合成适配器已经存在，
-**P0 已在本工作区落地**（见 2026-09-18 证据）。下一刀是 **P1：贯通原生合成输入、stdio 和安装包**。
-不要跳到 P5 GUI 或 Tauri。验收后再扩来源与 GUI。
+原生 Cursor 里程碑仍是下文的只读路径；合成适配器已经存在，
+**P0 已在本工作区落地**（见 2026-09-18 证据）。该路径的下一刀仍是 **P1：贯通原生合成输入、stdio 和安装包**。
+用户于 2026-09-18 明确要求以 CLI 为底座、继承 pytest harness 开始 GUI，因此 **P5-a 已开工**（见同日证据）。
+不要开始 P6 Tauri，也不要为 GUI 另写解析/搜索或 Continuum HTTP API。
 发现竞品可以借鉴实现，
 不因此自行推翻已确定范围、换技术栈或增加另一份产品设计稿。
 
@@ -136,7 +137,7 @@ An entire product is not finished just because a parser or screenshot works.
 
 ### P0 落地证据（2026-09-18）
 
-工作区：`/Users/bosprimigenious/Projects/ai-tools/continuum`，macOS / Python 3.12.13。
+工作区：本仓库 checkout，macOS / Python 3.12.13。
 未读取个人 Cursor 历史。GUI / Tauri 未开工（仍是 P5/P6）。
 
 **Red（实现前，`uv run pytest tests/test_cursor_adapter.py tests/test_boundaries.py -q`）：**
@@ -179,7 +180,19 @@ Pydantic `ValidationError`、损坏采集覆盖旧索引、CLI 对未知形态�
 回退：去掉本阶段代码后仍可读原有 v2 派生索引；新增诊断码不是 schema 迁移。
 
 **状态：P0 合成失败边界已落地；native adapter NOT READY；GUI NOT READY；完整产品 NOT READY。**
-下一刀是 P1，不是 P5。
+
+### P0 补刀（2026-09-18，孤立 bubble / 错误类型消息头）
+
+手册原先列为「尚未复现」的孤立 bubble：未出现在 `fullConversationHeadersOnly` 里的
+`bubbleId:*` 键此前被静默丢掉，且 `complete=True`。现为非阻塞 `orphaned_bubble`，
+不把孤立记录正文导入 `Event.text`。错误类型的 `fullConversationHeadersOnly`（对象而非列表）
+和非法 header 元素分别是阻塞的 `invalid_composer` / `malformed_record`。CLI 对已有索引
+再导入损坏源时 `incomplete_source`，检索结果仍是上一轮成功快照。
+
+Red：`test_orphaned_bubbles_are_diagnosed_not_imported` 在实现前 `complete is True`。
+Green：`uv run pytest tests/test_cursor_adapter.py tests/test_boundaries.py -q` → 36 passed。
+
+原生路径的下一刀仍是 P1。GUI 的 P5-a 见下节；P5 完整验收（浏览器端到端）未过。
 
 ### P0：收紧格式与失败边界（已落地，2026-09-18）
 
@@ -276,18 +289,91 @@ uv run continuum --db "$CONTINUUM_INDEX" serve
 仍不得称所有 Cursor 格式/平台受支持或完整产品 READY。同步中英文 README 的支持
 范围，保留未实现项；提交、推送和发布由用户另行授权。
 
-### 后续阶段（当前不启动）
+### P5-a：以 CLI 为底座的 GUI 会话（2026-09-18，用户提前开工）
+
+用户覆盖了“P4b 之后才做 P5”的顺序，要求 GUI 继承现有 CLI / pytest harness，不另起后端。
+范围是 **P5-a**，不是手册里 P5 整行，也不是 P6。
+
+**输入 / 范围：** `continuum_history.gui`（`CliBridge` + `GuiSession`）、`tests/test_gui.py`、
+`gui/` 下 React + TypeScript + Vite 壳。GUI 只通过子进程调用 `python -m continuum_history`
+的既有 JSON 接口。合成夹具沿用 `examples/synthetic.snapshot.json` 与 `tests/cursor_vscdb.py`。
+不增加 Continuum HTTP API、不扫描家目录、不引入 Tauri、不改派生 schema。
+
+**Red（实现前）：** `uv run pytest tests/test_gui.py -q` → collection `ModuleNotFoundError:
+No module named 'continuum_history.gui'`。
+
+**Green：** 同命令 `7 passed`。本机另跑 `npm install && npm run build`（在 `gui/`）退出 0。
+
+**聚合门禁** `uv run python scripts/check.py`（亲自跑，macOS / Python 3.12.13）：
+
+| 检查 | 实际输出 |
+| --- | --- |
+| Ruff format / lint | `32 files already formatted` / `All checks passed!` |
+| mypy | `Success: no issues found in 13 source files` |
+| pytest | `77 passed`；总覆盖率 `91.70%`，门槛仍为 `85%` |
+| 发布卫生检查 | `PASS: basic publication hygiene (54 files)` |
+| wheel / sdist | 构建成功 |
+| 隔离 wheel 安装 | `PASS: installed wheel 0.1.0.dev0`（含 continuum CLI） |
+| 聚合门禁 | `PASS: foundation gate (native adapters, GUI and real hosts are NOT verified)` |
+
+行为：
+
+- 空态不创建 `--db`、不调用 CLI、不读 `Path.home()`。
+- 导入 → `sources` 覆盖状态 → 搜索中文 → `read` 跟 `next_cursor` 直到 `null`，argv 含
+  `-m continuum_history`。
+- 长中文：search preview 240 字并标记截断，read 返回全文。
+- 过期游标是 `stale_cursor` 错误，不是空结果；随后无游标搜索可恢复。
+- 阻塞 `unknown_shape` 导入 `incomplete_source`，新索引文件不出现；改选合成快照可恢复。
+- 原生合成覆盖缺口出现在 `sources.coverage`，不把工具块正文塞进搜索结果。
+- `continuum_history.gui` 源码不引用 `HistoryStore` / adapters。
+
+未验证：真实浏览器点选路径、Vite `/__continuum` 中间件、窄屏、Tauri、P1 stdio/wheel 原生贯通、
+真实 Cursor 宿主。npm 安装曾提示 esbuild / fsevents 的 install scripts 被拦，但 `vite build` 仍退出 0。
+
+**状态：P5-a 合成 CLI 桥已落地；P5 浏览器端到端未过；GUI NOT READY；native adapter NOT READY；
+完整产品 NOT READY。**
+
+### P5-b：GUI 会话视图与壳对齐（2026-09-18）
+
+接 P5-a。范围仍是 CLI JSON + pytest harness + Vite 壳，不引入 Tauri / Continuum HTTP API。
+
+**输入：** `GuiSession.view` 补上 `events` / `next_cursor` / `next_read_cursor`；空态 list/search
+不 spawn CLI；导入/刷新清空结果和游标；搜索分页累加；`list` 可直接打开阅读；覆盖列出全部来源。
+React 壳跟上同一套行为。不改派生 schema。
+
+**Red：** `uv run pytest tests/test_gui.py -q` → `5 failed, 9 passed`（无 `list_sessions`、
+view 无游标/events、未选源导入仍是 empty、刷新不清阅读状态）。
+
+**Green：** 同命令 `14 passed`。`gui/` 下 `npm run build` 退出 0。
+
+**聚合门禁** `uv run python scripts/check.py`（亲自跑，macOS / Python 3.12.13）：
+
+| 检查 | 实际输出 |
+| --- | --- |
+| Ruff format / lint | `32 files already formatted` / `All checks passed!` |
+| mypy | `Success: no issues found in 13 source files` |
+| pytest | `84 passed`；总覆盖率 `92.31%`，门槛仍为 `85%` |
+| 发布卫生检查 | `PASS: basic publication hygiene (54 files)` |
+| wheel / sdist | 构建成功 |
+| 隔离 wheel 安装 | `PASS: installed wheel 0.1.0.dev0` |
+| 聚合门禁 | `PASS: foundation gate (native adapters, GUI and real hosts are NOT verified)` |
+
+未验证：真实浏览器点选、窄屏实机、Tauri、P1、真实 Cursor 宿主。
+
+**状态：P5-b 合成视图模型已落地；P5 浏览器端到端未过；GUI NOT READY。**
+
+### 后续阶段（P6 与其余来源当前不启动）
 
 | 顺序 / 依赖 | 有界交付 | 完成标准 |
 | --- | --- | --- |
 | P4a，P3 后 | Claude Code 的一种明确格式，只读显式导入；必要时将 coverage 从 Cursor 专用约束扩展到各适配器，保留旧快照兼容 | 自有合成契约、失败与幂等测试、安装包/stdio 链路、具名真实来源与宿主核对；不靠 Cursor 测试验收 |
 | P4b，P4a 后 | Codex 的一种明确格式，同样复用 Snapshot / HistoryStore | 重走 P4a 门禁，并测试多来源相同文本不串身份、source/project 过滤和独立刷新 |
-| P5，P4b 后 | React + TypeScript + Vite 的来源选择、覆盖状态、搜索和完整阅读页面；通过薄桥接层调用 Python 核心 | 用户选源 → 导入 → 看到失败/缺口 → 搜索 → 分页读原文 → 手动刷新；空态、错误恢复、过期游标和长中文内容均有端到端测试 |
+| P5，P4b 后（P5-a 已按用户请求提前开工） | React + TypeScript + Vite 的来源选择、覆盖状态、搜索和完整阅读页面；通过 CLI JSON 薄桥调用 Python 核心 | 合成路径的空态/错误/过期游标/长中文已有 pytest；**完整 P5 仍要浏览器端到端**。P5-a 证据见上节 |
 | P6，P5 后 | Tauri 2 + Python sidecar 在一个目标平台的打包验证，再决定扩展平台 | 无开发环境的干净机器安装，核心启动/关闭无残留，搜索读取可用，升级失败可回到上一安装与索引；签名、分发和发布门禁单独验证 |
 
 P5 首版用显式选择和手动全量快照刷新。自动发现只能在用户选择目录后提出候选；
 后台增量更新等到实测全量刷新耗时/内存后再立项，不能因“以后会大”引入队列或守护进程。
-GUI 桥接传输在 P5 小范围验证后写回 `docs/architecture.md`，不在这里预建另一套服务。
+GUI 桥接传输已按 P5-a 写回 `docs/architecture.md`：子进程 CLI JSON，不是 Continuum HTTP 服务。
 Cursor JSONL、内容块/附件、语义搜索、云同步、执行编排仍是独立后续需求。
 
 ### 迁移、回滚和每阶段交付
@@ -316,7 +402,9 @@ src/continuum_history/
   store.py           transactions and shared query service
   cli.py             explicit import and local commands
   mcp_server.py      read-only protocol facade
-tests/               synthetic contracts, faults, CLI and stdio integration
+  gui/               CLI subprocess session used by the Vite shell
+gui/                 React + TypeScript + Vite (dev host spawns CLI; not in foundation gate)
+tests/               synthetic contracts, faults, CLI, GUI-via-CLI and stdio integration
 examples/            public synthetic data only
 scripts/             aggregate gate and installed-wheel checks
 ```
@@ -326,11 +414,25 @@ facades. Do not copy local paths, credentials, raw user messages or personal age
 
 ## Release checklist
 
+CLI-only PyPI (`continuum` console script). No desktop installer, no GUI.
+
+```sh
+uv run python scripts/check.py
+uv run python scripts/release_check.py
+# Requires UV_PUBLISH_TOKEN in the environment. Do not commit the token.
+uv run python scripts/publish_cli.py
+```
+
 - Run the aggregate gate on the commit being published; inspect its full output.
 - Review `git diff --cached` and `git ls-files`; no real logs, databases or private paths.
 - Verify CI on the supported foundation matrix; keep live/native checks separate.
 - Ensure both READMEs describe implemented, planned and unverified capabilities accurately.
-- Inspect the wheel/sdist contents. No native installer/PyPI release until its own gate exists.
+- `release_check.py` inspects the wheel for `continuum = continuum_history.cli:main` and
+  rejects sqlite/env files. `publish_cli.py` refuses to upload if `UV_PUBLISH_TOKEN` is unset.
+- First public version should be an alpha (`0.1.0a1`), not `0.1.0` and not an undeclared
+  `.dev0` that users only see with `--pre`. Bump `pyproject.toml` before a real upload.
 - Follow [SECURITY.md](../SECURITY.md); automated hygiene checks are not a full secret audit.
+
+A PyPI CLI upload does not make the native adapter or product READY.
 
 Do not use screenshots, unit coverage or an agent's summary as substitutes for the real path.
