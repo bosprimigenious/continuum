@@ -32,9 +32,9 @@ without importing the source checkout. Tests must never discover the developer's
 
 接下来的开发请求应直接检查和修改代码，不要只输出计划（用户明确要求制订计划时除外）。
 原生 Cursor 里程碑仍是下文的只读路径；合成适配器已经存在，
-**P0 已在本工作区落地**（见 2026-09-18 证据）。该路径的下一刀仍是 **P1：贯通原生合成输入、stdio 和安装包**。
-用户于 2026-09-18 明确要求以 CLI 为底座、继承 pytest harness 开始 GUI，因此 **P5-a 已开工**（见同日证据）。
-不要开始 P6 Tauri，也不要为 GUI 另写解析/搜索或 Continuum HTTP API。
+**P0 与 P1 已在本工作区落地**（见 2026-09-18 证据）。原生路径的下一刀是 **P2：授权范围内的真实来源与 MCP 宿主**；无授权则保持 BLOCKED。
+用户于 2026-09-18 明确要求以 CLI 为底座开始 GUI，**P5-a/P5-b 已开工**。不要开始 P6 Tauri，
+也不要为 GUI 另写解析/搜索或 Continuum HTTP API。
 发现竞品可以借鉴实现，
 不因此自行推翻已确定范围、换技术栈或增加另一份产品设计稿。
 
@@ -192,7 +192,7 @@ Pydantic `ValidationError`、损坏采集覆盖旧索引、CLI 对未知形态�
 Red：`test_orphaned_bubbles_are_diagnosed_not_imported` 在实现前 `complete is True`。
 Green：`uv run pytest tests/test_cursor_adapter.py tests/test_boundaries.py -q` → 36 passed。
 
-原生路径的下一刀仍是 P1。GUI 的 P5-a 见下节；P5 完整验收（浏览器端到端）未过。
+原生路径的下一刀是 P2（需授权）。GUI 的 P5-a/P5-b 见后文；P5 浏览器端到端未过。
 
 ### P0：收紧格式与失败边界（已落地，2026-09-18）
 
@@ -226,7 +226,7 @@ uv run python scripts/check.py
 有可重复证据；完整聚合门禁通过。不得降低覆盖率门槛或删除其他数据库/分页/Unicode
 回归。回退本阶段代码后仍能读取原有 v2 派生索引；新增诊断不冒充数据库迁移。
 
-### P1：贯通原生合成输入、stdio 和安装包（依赖 P0）
+### P1：贯通原生合成输入、stdio 和安装包（已落地，2026-09-18）
 
 **实施：** 扩展 `tests/test_interfaces.py` 和 `scripts/smoke_wheel.py`，复用合成构造器：
 生成 Cursor SQLite → CLI 显式导入新索引 → 启动真实 stdio 子进程 → 四个 MCP 工具
@@ -245,6 +245,37 @@ uv run python scripts/check.py
 **出口：** 原生合成长会话逐项匹配，原始源未被修改，错误和 coverage 经 MCP 可见；
 聚合门禁包含这些用例。获得发布授权后，在候选提交上检查现有 Linux/macOS/Windows
 CI 矩阵；没有远端证据的组合保留为未验证，不自动 push 触发 CI。
+
+**Red（实现前）：** `uv run pytest tests/test_interfaces.py::test_cursor_cli_stdio_reads_long_synthetic_source -q`
+失败于 stdio `history_search`「数据库锁」返回 `items=[]`（长会话夹具当时不含中文）。
+
+**Green：** 同命令通过。`uv run pytest tests/test_interfaces.py tests/test_cursor_adapter.py -q` → 32 passed。
+`uv build` 后 `uv run python scripts/smoke_wheel.py` 打印 `PASS: cursor native wheel stdio`。
+隔离进程用已安装 `continuum` 入口导入合成 `state.vscdb`，不从 checkout import 适配器。
+
+行为：
+
+- CLI `--adapter cursor-state-vscdb --source-id` 导入 40 条合成会话；重复导入 `changed=false`；源文件字节不变。
+- 真 stdio 四个工具：中文搜索命中首条、`history_read` 跟 cursor 直到 `null`、末条 `end-marker`、每条有 `source_ref`。
+- `history_sources` 可见 `cursor-state-vscdb-v1` coverage；缺失会话 `not_found`。
+- 预期来自夹具正文，不拿 MCP 输出去对进程内 `HistoryStore` 的同一次实现。
+
+未验证：真实 Cursor 宿主、非作者安装、远端 CI 矩阵。隔离安装仍可能打印
+`WARN --no-project was provided, but no project was found`，退出码 0。
+
+**聚合门禁** `uv run python scripts/check.py`（亲自跑，macOS / Python 3.12.13）：
+
+| 检查 | 实际输出 |
+| --- | --- |
+| Ruff format / lint | `32 files already formatted` / `All checks passed!` |
+| mypy | `Success: no issues found in 13 source files` |
+| pytest | `85 passed`；总覆盖率 `92.31%`，门槛仍为 `85%` |
+| 发布卫生检查 | `PASS: basic publication hygiene (54 files)` |
+| wheel / sdist | 构建成功 |
+| 隔离 wheel 安装 | `PASS: installed wheel 0.1.0.dev0` / `PASS: cursor native wheel stdio` |
+| 聚合门禁 | `PASS: foundation gate (native adapters, GUI and real hosts are NOT verified)` |
+
+**状态：P1 合成 CLI/stdio/wheel 贯通已落地；native adapter NOT READY；GUI NOT READY；完整产品 NOT READY。**
 
 ### P2：一个真实来源与一个真实 MCP 宿主（依赖 P1、显式授权）
 

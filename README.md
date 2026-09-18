@@ -29,7 +29,7 @@ to another agent through MCP—without rewriting a vendor's conversation databas
 | Version-bound pagination and explicit errors | Desktop installer / Tauri |
 | CLI-backed GUI session and Vite shell (pytest only) | Browser e2e, live GUI host |
 | CLI and four read-only stdio MCP tools sharing one core | Fine-grained client permissions and attachment reading |
-| Cursor IDE `state.vscdb` read-only import (synthetic fixtures) | Live Cursor host verification |
+| Cursor IDE `state.vscdb` read-only import through CLI/stdio/wheel (synthetic fixtures) | Live Cursor host verification |
 | Unit, rollback, CLI and real stdio protocol tests; CI | Cross-agent execution, cloud sync, semantic search |
 
 No private conversations are included. The example is hand-written synthetic data.

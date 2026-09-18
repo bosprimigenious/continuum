@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cursor_vscdb import long_conversation  # type: ignore[import-not-found]
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
@@ -155,3 +156,91 @@ def test_inprocess_mcp_facade_contract(tmp_path: Path) -> None:
             assert "not_found" in str(failed.content)
 
     asyncio.run(asyncio.wait_for(exercise(), timeout=10))
+
+
+def test_cursor_cli_stdio_reads_long_synthetic_source(tmp_path: Path) -> None:
+    source = tmp_path / "state.vscdb"
+    long_conversation(source, count=40)
+    before = source.read_bytes()
+    extras = {
+        path: path.read_bytes() if path.exists() else None
+        for path in (Path(f"{source}-wal"), Path(f"{source}-shm"))
+    }
+    db = str(tmp_path / "index.db")
+    imported = run_cli(
+        "--db",
+        db,
+        "import",
+        "--adapter",
+        "cursor-state-vscdb",
+        "--source-id",
+        "cursor-p1",
+        str(source),
+    )
+    assert imported.returncode == 0, imported.stderr
+    payload = json.loads(imported.stdout)
+    assert payload["event_count"] == 40
+    assert payload["changed"] is True
+    repeated = run_cli(
+        "--db",
+        db,
+        "import",
+        "--adapter",
+        "cursor-state-vscdb",
+        "--source-id",
+        "cursor-p1",
+        str(source),
+    )
+    assert json.loads(repeated.stdout)["changed"] is False
+    assert source.read_bytes() == before
+    for extra, content in extras.items():
+        if content is None:
+            assert not extra.exists()
+        else:
+            assert extra.read_bytes() == content
+
+    async def exercise() -> None:
+        params = StdioServerParameters(
+            command=sys.executable, args=["-m", "continuum_history", "--db", db, "serve"]
+        )
+        async with Client(params) as client:
+            listed = await client.list_tools()
+            assert {tool.name for tool in listed.tools} == {
+                "history_sources",
+                "history_list",
+                "history_search",
+                "history_read",
+            }
+            sources = await client.call_tool("history_sources", {})
+            assert not sources.is_error
+            item = sources.structured_content["items"][0]
+            assert item["adapter"] == "cursor-state-vscdb-v1"
+            assert item["coverage"]["adapter"] == "cursor-state-vscdb-v1"
+            sessions = await client.call_tool("history_list", {"limit": 1})
+            session_id = sessions.structured_content["items"][0]["id"]
+            hit = await client.call_tool("history_search", {"query": "数据库锁"})
+            assert not hit.is_error
+            assert hit.structured_content["items"]
+            assert "数据库锁" in hit.structured_content["items"][0]["preview"]
+            seen: list[dict[str, object]] = []
+            cursor = None
+            while True:
+                arguments: dict[str, object] = {"session_id": session_id, "limit": 7}
+                if cursor is not None:
+                    arguments["cursor"] = cursor
+                page = await client.call_tool("history_read", arguments)
+                assert not page.is_error, page.content
+                for event in page.structured_content["items"]:
+                    assert event["source_ref"]
+                    assert event["text"]
+                    seen.append(event)
+                cursor = page.structured_content["next_cursor"]
+                if cursor is None:
+                    break
+            assert [event["native_id"] for event in seen] == [f"bubble-{i:04d}" for i in range(40)]
+            assert str(seen[-1]["text"]).endswith("end-marker")
+            missing = await client.call_tool("history_read", {"session_id": "missing"})
+            assert missing.is_error
+            assert "not_found" in str(missing.content)
+
+    asyncio.run(asyncio.wait_for(exercise(), timeout=30))

@@ -21,10 +21,10 @@ repository; do not change global agent configs or other repositories while worki
 - Start in this repository root, inspect `git status --short`, and preserve existing local work.
 - Read the continuation entry in `docs/development.md`; implement its bounded milestone when
   asked to develop. Directly inspect and modify code, not just produce another plan document.
-- Native Cursor path priority remains P1 (synthetic input through CLI/stdio/wheel), then live
-  host, then other sources. The user started P5-a: a GUI that shells out to the continuum CLI
-  JSON interface and reuses the pytest harness. Do not start P6 Tauri, an HTTP Continuum API,
-  execution orchestration, cloud accounts or a stack rewrite.
+- Native Cursor path: P0/P1 are in this tree. Next is P2 (live host, explicit authorization),
+  then P3, then other sources. P5-a/P5-b GUI shells out to the continuum CLI JSON interface.
+  Do not start P6 Tauri, an HTTP Continuum API, execution orchestration, cloud accounts or a
+  stack rewrite.
 - Run the existing aggregate gate before changes and after implementation. Carry baseline
   failures forward explicitly; do not skip them or lower the coverage floor.
 - Preserve regression coverage for unrelated databases, cursor scope/revision, Unicode output,

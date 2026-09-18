@@ -13,7 +13,7 @@
 
 已实现：规范化快照 v1、SQLite 原子导入、全文/短中文检索、来源引用、版本绑定分页、
 CLI、4 个只读 MCP 工具、失败回滚测试、真实 stdio 协议测试、构建与 CI、
-Cursor IDE `state.vscdb` 只读导入（合成夹具；未做真实宿主验收）、
+Cursor IDE `state.vscdb` 只读导入经 CLI/stdio/隔离 wheel（合成夹具；未做真实宿主验收）、
 以 CLI JSON 为底座的 GUI 会话和 Vite 壳（pytest；未做浏览器端到端）。
 
 未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、浏览器端到端 GUI、

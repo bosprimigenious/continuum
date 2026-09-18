@@ -165,7 +165,8 @@ def long_conversation(path: Path, count: int = 40) -> None:
             f"bubble-{i:04d}",
             bubble_payload(
                 1 if i % 2 == 0 else 2,
-                f"turn-{i:04d} marker={'end-marker' if i == count - 1 else i}",
+                ("How do we investigate a SQLite 数据库锁? " if i == 0 else "")
+                + f"turn-{i:04d} marker={'end-marker' if i == count - 1 else i}",
             ),
         )
         for i in range(count)
