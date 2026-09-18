@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "continuum-history"
-version = "0.1.0.dev0"
+version = "0.1.0a1"
 description = "Local-first conversation history for humans and coding agents"
 readme = "README.md"
 requires-python = ">=3.12"

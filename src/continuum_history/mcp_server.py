@@ -26,7 +26,7 @@ def expose_domain_errors[**P, T](operation: Callable[P, T]) -> Callable[P, T]:
 def create_server(store: HistoryStore) -> MCPServer[Any]:
     server: MCPServer[Any] = MCPServer(
         "Continuum",
-        version="0.1.0.dev0",
+        version="0.1.0a1",
         log_level="WARNING",
         instructions=(
             "Search explicitly imported local snapshots. Native discovery is not implemented. "
