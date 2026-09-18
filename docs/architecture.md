@@ -39,22 +39,34 @@ Dependency versions are resolved in `uv.lock`, not copied from a tutorial.
 `examples/synthetic.snapshot.json` is the executable shape of normalized schema v1:
 
 - Snapshot: `schema_version=1`, a source-instance `source_id`, complete `sessions`.
-- Session: source-native `native_id`, title, nullable project, ordered `events`.
-- Event: source-native `native_id`, role, text. Event identities are unique within a session.
+- Session: source-native `native_id`, title, nullable project, ordered `events`,
+  optional `created_at` / `updated_at`.
+- Event: source-native `native_id`, role, text, optional `created_at`. Event identities are
+  unique within a session.
+- Snapshot: `adapter` (default `continuum-snapshot-v1`) and optional structured `coverage`
+  for native readers.
 - Full source snapshots are bounded to 16 MiB at the file reader; individual text to 1,000,000
   characters. NUL is rejected explicitly because SQLite text functions treat it inconsistently.
-- These are foundation constraints, not claims about native log limits. Timestamps, branches,
-  media blocks and partial-coverage diagnostics require a versioned adapter contract extension.
+- Native Cursor `state.vscdb` imports are not bounded by the snapshot file cap; they copy
+  the selected main file plus WAL/SHM sidecars to a temporary directory, then query
+  `cursorDiskKV` with `mode=ro`. Direct SQLite WAL readers update the source SHM; the copy
+  keeps that write off the vendor files. Unsupported tool/thinking/media fields become
+  coverage issues instead of being concatenated into `text`.
+- These are foundation constraints, not claims about native log limits. Branches, media
+  blocks and JSONL Cursor transcripts remain unimplemented.
 
 Stable IDs hash the tuple `(source instance, native session[, native event])`, never text alone.
 Source references use an encoded `continuum-snapshot://` namespace and are not arbitrary file paths.
 The source digest and global index revision identify the imported content version. References
 identify events in the current snapshot; no historical version archive is kept.
 
-An import validates everything before a write transaction. It replaces exactly one source and
-its FTS rows, then increments the revision. Unchanged canonical snapshots are no-ops. Any database
-failure rolls back the replacement. A failed import leaves the previous successful snapshot;
-the CLI exits nonzero and does not claim a new successful indexing time.
+An import validates everything before a write transaction. Blocking native coverage
+(`unknown_shape`, `illegal_identity`, `malformed_record`, `missing_bubble`, `duplicate_event`,
+`invalid_composer`) raises `incomplete_source` and does not replace the previous index.
+Unsupported tool/thinking blocks are not blocking. Unchanged canonical snapshots are no-ops.
+Any database failure rolls back the replacement. A failed import leaves the previous successful
+snapshot; the CLI exits nonzero, does not create a new empty `--db` for a blocked native import,
+and does not claim a new successful indexing time.
 
 Only an empty unclaimed SQLite file or an existing index with the Continuum application ID and
 supported schema is accepted. Future schemas fail closed. New POSIX index files are created
@@ -90,9 +102,13 @@ stop clients, retain the old index as a rollback copy, create a **new** path, re
 snapshots and verify counts/search before pointing clients to the new index. Do not overwrite
 the only copy. Deleting a row or index is not guaranteed to securely erase WAL/backups/storage.
 
+Current derived index `user_version` is **2** (adapter name, coverage JSON, timestamps).
+A v1 foundation index is `unsupported_schema`; do not ALTER it in place. Keep that file,
+create a new path, reimport, then retarget CLI/MCP `--db`.
+
 ## Deliberately deferred
 
-Native source discovery, live WAL/partial-JSONL collection, consent UI, content-block and media
-coverage, native host setup, GUI, task continuity and managed execution. The source adapter and
-consumer compatibility matrices are independent. A working MCP client does not prove that
-client's native history format can be read.
+Native source discovery, live Cursor/host verification, agent-transcripts JSONL, Claude Code
+and Codex readers, content-block and media coverage, GUI, task continuity and managed
+execution. The source adapter and consumer compatibility matrices are independent. A working
+MCP client does not prove that client's native history format can be read on a live host.

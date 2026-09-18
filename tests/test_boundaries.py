@@ -122,6 +122,44 @@ def test_stat_and_fstat_precision_difference_is_not_a_source_change(
     assert load_snapshot(EXAMPLE).source_id == "synthetic-demo"
 
 
+def test_blocking_native_coverage_does_not_replace_index_or_invalidate_cursors(
+    tmp_path: Path,
+) -> None:
+    from continuum_history.models import CoverageIssue, SnapshotCoverage
+
+    store = HistoryStore(tmp_path / "index.db")
+    snapshot = load_snapshot(EXAMPLE)
+    store.replace_source(snapshot)
+    before = store.sources()
+    session_id = store.list_sessions()["items"][0]["id"]
+    token = store.read(session_id, limit=1)["next_cursor"]
+    assert token is not None
+    damaged = snapshot.model_copy(
+        update={
+            "adapter": "cursor-state-vscdb-v1",
+            "sessions": (),
+            "coverage": SnapshotCoverage(
+                adapter="cursor-state-vscdb-v1",
+                format="cursor.global_state.vscdb.cursorDiskKV",
+                observed_composer_data_version=13,
+                observed_bubble_version=None,
+                sessions_seen=1,
+                sessions_imported=0,
+                events_seen=0,
+                events_imported=0,
+                issues=(CoverageIssue(code="unknown_shape", native_session_id="session-x"),),
+                complete=False,
+            ),
+        }
+    )
+    with pytest.raises(HistoryError, match="incomplete_source"):
+        store.replace_source(damaged)
+    assert store.sources() == before
+    continued = store.read(session_id, limit=1, cursor=token)
+    assert continued["items"][0]["native_id"] == "message-2"
+    assert store.search("数据库锁")["items"]
+
+
 def test_source_change_during_capture_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

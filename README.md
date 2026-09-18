@@ -24,10 +24,11 @@ to another agent through MCP—without rewriting a vendor's conversation databas
 
 | Available in this repository | Not implemented yet |
 | --- | --- |
-| Versioned normalized snapshot contract and synthetic example | Native Cursor / Claude Code / Codex adapters |
+| Versioned normalized snapshot contract and synthetic example | Claude Code / Codex adapters; Cursor JSONL transcripts |
 | Atomic SQLite imports, literal Unicode search, source references | Automatic discovery and background incremental updates |
 | Version-bound pagination and explicit errors | GUI / desktop installer |
 | CLI and four read-only stdio MCP tools sharing one core | Fine-grained client permissions and attachment reading |
+| Cursor IDE `state.vscdb` read-only import (synthetic fixtures) | Live Cursor host verification |
 | Unit, rollback, CLI and real stdio protocol tests; CI | Cross-agent execution, cloud sync, semantic search |
 
 No private conversations are included. The example is hand-written synthetic data.
@@ -58,7 +59,19 @@ uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
 Pass the returned `next_cursor` with `--cursor` to continue. `null` means the end.
 Rerun the import: it reports `"changed": false`. The input file is never modified.
 
-`import` accepts **only Continuum's normalized snapshot v1**, not a vendor's raw logs.
+`import` accepts Continuum's normalized snapshot v1 by default. To import one explicitly
+selected Cursor IDE `state.vscdb` (not auto-discovered, not a live-host verification):
+
+```sh
+uv run continuum --db .continuum/demo.sqlite3 import \
+  --adapter cursor-state-vscdb --source-id cursor-demo PATH/TO/state.vscdb
+```
+
+Do not commit real Cursor databases. The reader copies the selected file plus WAL/SHM
+sidecars and opens the copy with SQLite `mode=ro`; it does not write the source. A damaged
+capture (`incomplete_source`) leaves any existing index unchanged and does not create a new
+empty `--db`. Other Cursor stores (agent-transcripts JSONL, workspace DBs) are not this adapter.
+
 Reusing a `source_id` replaces that source's entire derived snapshot atomically, including
 removing previously indexed events absent from the new snapshot. It is not an archive merge.
 Keep your source files; indexes are disposable derived data.

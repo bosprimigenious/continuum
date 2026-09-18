@@ -12,9 +12,10 @@
 **这是可运行的开源开发地基，不是已经适配三家的完整产品。**
 
 已实现：规范化快照 v1、SQLite 原子导入、全文/短中文检索、来源引用、版本绑定分页、
-CLI、4 个只读 MCP 工具、失败回滚测试、真实 stdio 协议测试、构建与 CI。
+CLI、4 个只读 MCP 工具、失败回滚测试、真实 stdio 协议测试、构建与 CI、
+Cursor IDE `state.vscdb` 只读导入（合成夹具；未做真实宿主验收）。
 
-未实现：Cursor / Claude Code / Codex 原生读取器、自动发现与实时更新、GUI、
+未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、GUI、
 桌面安装包、细粒度客户端权限、附件读取、跨 Agent 执行。
 
 仓库只有人工编写的合成示例，没有私人对话、旧归档、本机配置或凭据。
@@ -44,7 +45,12 @@ uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
 返回的 `next_cursor` 可通过 `--cursor` 继续读取；`null` 表示结束。
 重复导入相同快照得到 `changed: false`，原文件不变。
 
-注意：`import` 只接受 Continuum 快照格式，**不能直接读取原生日志**。
+默认 `import` 仍只接受 Continuum 快照 v1。显式指定适配器后可导入一份自选的
+Cursor `state.vscdb`（需要 `--source-id`，不会扫描家目录）。读取时复制主库和
+WAL/SHM 再只读打开，不写源文件。结构损坏的采集会 `incomplete_source`，不覆盖已有索引，
+也不会为失败导入新建空 `--db`。真实 Cursor 库不要提交进仓库；JSONL / 工作区库不在
+这一适配器范围内。
+
 相同 `source_id` 的新导入会原子替换该来源的派生索引，不是历史版本并集；
 新快照缺少的旧事件会从索引移除。请保留源文件，不把索引当备份。
 

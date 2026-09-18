@@ -6,9 +6,19 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from continuum_history.adapters.cursor_state_vscdb import load_cursor_state_vscdb
 from continuum_history.adapters.snapshot import load_snapshot
 from continuum_history.errors import HistoryError
+from continuum_history.models import Snapshot
 from continuum_history.store import HistoryStore
+
+
+def _load_import(path: Path, adapter: str, source_id: str | None) -> Snapshot:
+    if adapter == "snapshot":
+        return load_snapshot(path)
+    if not source_id:
+        raise HistoryError("invalid_import: --source-id is required for cursor-state-vscdb")
+    return load_cursor_state_vscdb(path, source_id=source_id)
 
 
 def main() -> int:
@@ -18,9 +28,20 @@ def main() -> int:
     parser.add_argument("--db", type=Path, required=True, help="Dedicated derived SQLite index")
     sub = parser.add_subparsers(dest="command", required=True)
     ingest = sub.add_parser(
-        "import", help="Import a full normalized v1 snapshot, not native history"
+        "import",
+        help="Import a normalized v1 snapshot or one explicitly selected native source",
     )
     ingest.add_argument("file", type=Path)
+    ingest.add_argument(
+        "--adapter",
+        choices=("snapshot", "cursor-state-vscdb"),
+        default="snapshot",
+        help="snapshot (default) or cursor-state-vscdb",
+    )
+    ingest.add_argument(
+        "--source-id",
+        help="Required identity for native adapters; ignored for snapshot files",
+    )
     sub.add_parser("sources", help="Show explicitly imported snapshot coverage")
     for name in ("list", "search", "read"):
         command = sub.add_parser(name)
@@ -37,7 +58,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         # Validate input before even creating the derived database.
-        snapshot = load_snapshot(args.file) if args.command == "import" else None
+        snapshot = None
+        if args.command == "import":
+            snapshot = _load_import(args.file, args.adapter, args.source_id)
+            HistoryStore.reject_blocking_coverage(snapshot)
         store = HistoryStore(args.db)
         match args.command:
             case "import":

@@ -19,18 +19,30 @@ from urllib.parse import quote
 from continuum_history.errors import HistoryError
 from continuum_history.models import Snapshot
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 APPLICATION_ID = 0x434E544D  # CNTM: distinguish derived indexes from native databases.
+BLOCKING_COVERAGE_CODES = frozenset(
+    {
+        "malformed_record",
+        "missing_bubble",
+        "duplicate_event",
+        "invalid_composer",
+        "unknown_shape",
+        "illegal_identity",
+    }
+)
 SCHEMA = """
 CREATE TABLE meta (revision INTEGER NOT NULL);
 INSERT INTO meta VALUES (0);
 CREATE TABLE sources (
     id TEXT PRIMARY KEY, digest TEXT NOT NULL, indexed_at TEXT NOT NULL,
-    session_count INTEGER NOT NULL, event_count INTEGER NOT NULL
+    session_count INTEGER NOT NULL, event_count INTEGER NOT NULL,
+    adapter TEXT NOT NULL, coverage_json TEXT
 );
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     native_id TEXT NOT NULL, title TEXT NOT NULL, project TEXT,
+    created_at TEXT, updated_at TEXT,
     UNIQUE(source_id, native_id)
 );
 CREATE TABLE events (
@@ -38,12 +50,13 @@ CREATE TABLE events (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     native_id TEXT NOT NULL, ordinal INTEGER NOT NULL, role TEXT NOT NULL,
     text TEXT NOT NULL, search_text TEXT NOT NULL, source_ref TEXT NOT NULL,
+    created_at TEXT,
     UNIQUE(session_id, native_id), UNIQUE(session_id, ordinal)
 );
 CREATE INDEX sessions_source ON sessions(source_id);
 CREATE INDEX events_session ON events(session_id, ordinal);
 CREATE VIRTUAL TABLE search USING fts5(search_text, tokenize='trigram case_sensitive 1');
-PRAGMA user_version=1;
+PRAGMA user_version=2;
 PRAGMA application_id=1129206861;
 """
 
@@ -117,9 +130,21 @@ class HistoryStore:
         finally:
             db.close()
 
+    @staticmethod
+    def reject_blocking_coverage(snapshot: Snapshot) -> None:
+        """Refuse damaged native captures before they can wipe a previous index."""
+        coverage = snapshot.coverage
+        if coverage is None:
+            return
+        if any(issue.code in BLOCKING_COVERAGE_CODES for issue in coverage.issues):
+            raise HistoryError(
+                "incomplete_source: damaged capture cannot replace the previous index"
+            )
+
     def replace_source(self, snapshot: Snapshot) -> dict[str, Any]:
         """Atomically replace exactly one explicitly supplied full source snapshot."""
         snapshot = Snapshot.model_validate(snapshot.model_dump())
+        self.reject_blocking_coverage(snapshot)
         digest = hashlib.sha256(snapshot.model_dump_json().encode()).hexdigest()
         event_count = sum(len(session.events) for session in snapshot.sessions)
         with self.connection() as db:
@@ -136,20 +161,30 @@ class HistoryStore:
             )
             db.execute("DELETE FROM sources WHERE id=?", (snapshot.source_id,))
             db.execute(
-                "INSERT INTO sources VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO sources VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     snapshot.source_id,
                     digest,
                     datetime.now(UTC).isoformat(),
                     len(snapshot.sessions),
                     event_count,
+                    snapshot.adapter,
+                    None if snapshot.coverage is None else snapshot.coverage.model_dump_json(),
                 ),
             )
             for session in snapshot.sessions:
                 sid = identity(snapshot.source_id, session.native_id)
                 db.execute(
-                    "INSERT INTO sessions VALUES (?, ?, ?, ?, ?)",
-                    (sid, snapshot.source_id, session.native_id, session.title, session.project),
+                    "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        sid,
+                        snapshot.source_id,
+                        session.native_id,
+                        session.title,
+                        session.project,
+                        session.created_at,
+                        session.updated_at,
+                    ),
                 )
                 for ordinal, event in enumerate(session.events):
                     eid = identity(snapshot.source_id, session.native_id, event.native_id)
@@ -159,7 +194,7 @@ class HistoryStore:
                     )
                     inserted = db.execute(
                         "INSERT INTO events (id, session_id, native_id, ordinal, role, text, "
-                        "search_text, source_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "search_text, source_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             eid,
                             sid,
@@ -169,6 +204,7 @@ class HistoryStore:
                             event.text,
                             event.text.casefold(),
                             ref,
+                            event.created_at,
                         ),
                     )
                     db.execute(
@@ -187,19 +223,25 @@ class HistoryStore:
         with self.connection() as db:
             db.execute("BEGIN")
             revision = db.execute("SELECT revision FROM meta").fetchone()[0]
-            items = [
-                {
-                    **dict(row),
-                    "adapter": "continuum-snapshot-v1",
-                    "coverage": "supplied_snapshot",
-                    "live": False,
-                }
-                for row in db.execute("SELECT * FROM sources ORDER BY id")
-            ]
+            items = []
+            for row in db.execute("SELECT * FROM sources ORDER BY id"):
+                payload = dict(row)
+                coverage_json = payload.pop("coverage_json")
+                items.append(
+                    {
+                        **payload,
+                        "coverage": (
+                            json.loads(coverage_json)
+                            if coverage_json
+                            else {"status": "supplied_snapshot"}
+                        ),
+                        "live": False,
+                    }
+                )
             return {
                 "items": items,
                 "index_revision": revision,
-                "native_adapters": "not_implemented",
+                "native_adapters": ["cursor-state-vscdb-v1"],
             }
 
     def _page(
@@ -267,7 +309,7 @@ class HistoryStore:
                 raise HistoryError("not_found: session is not in this index")
             result = self._page(
                 db,
-                "SELECT id, native_id, ordinal, role, text, source_ref FROM events "
+                "SELECT id, native_id, ordinal, role, text, source_ref, created_at FROM events "
                 "WHERE session_id=? ORDER BY ordinal",
                 [session_id],
                 key=identity("read", session_id),
