@@ -1,57 +1,52 @@
 <div align="center">
 
-# CONTINUUM
+<img src="gui/src-tauri/icons/icon.png" width="96" height="96" alt="Continuum">
+
+# Continuum
 
 **Your tools change. Your context stays.**
 
-A local-first history layer for humans and coding agents.
+Local conversation history for humans and coding agents.
+Import what you point at. Search it. Read it to the end. Hand a slice to another agent over MCP.
+Never rewrite a vendor database.
 
 [![CI](https://github.com/bosprimigenious/continuum/actions/workflows/ci.yml/badge.svg)](https://github.com/bosprimigenious/continuum/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/bosprimigenious/continuum?include_prereleases)](https://github.com/bosprimigenious/continuum/releases)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Stage: pre-alpha](https://img.shields.io/badge/stage-pre--alpha-orange)
+![pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
 
-[中文](README.zh-CN.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[中文](README.zh-CN.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releases](https://github.com/bosprimigenious/continuum/releases)
 
 </div>
 
-Coding conversations are scattered across tools. Continuum is being built to let you
-find them in one place, read their original context, and make selected history available
-to another agent through MCP—without rewriting a vendor's conversation database.
+---
 
-## Where the project stands
+Continuum is a **local** index of conversations you already have on disk.
+You choose a file. Continuum copies what it can into a derived SQLite database.
+CLI, MCP, and the GUI all query that same index.
 
-**This is a developer foundation, not a ready-to-use history browser.**
+It does **not** scan your home directory, does **not** write Cursor/Claude/Codex stores,
+and does **not** upload chats. Pre-alpha: the Cursor path is synthetic-fixture green;
+a live host is not verified. PyPI is not published yet.
 
-| Available in this repository | Not implemented yet |
-| --- | --- |
-| Versioned normalized snapshot contract and synthetic example | Claude Code / Codex adapters; Cursor JSONL transcripts |
-| Atomic SQLite imports, literal Unicode search, source references | Automatic discovery and background incremental updates |
-| Version-bound pagination and explicit errors | Signed desktop installer / notarization |
-| CLI-backed GUI session and Vite shell (pytest only) | Browser e2e, live GUI host |
-| CLI and four read-only stdio MCP tools sharing one core | Fine-grained client permissions and attachment reading |
-| Cursor IDE `state.vscdb` read-only import through CLI/stdio/wheel (synthetic fixtures) | Live Cursor host verification |
-| GitHub prerelease wheel/sdist `v0.1.0a1`; Foundation CI on Linux/macOS/Windows | PyPI `continuum-history` (OIDC 422: pending publisher missing) |
-| Tauri 2 + CLI sidecar; local unsigned macOS `.app` build artifact | Signed installer; Windows `.exe`; clean-machine desktop install |
-| Unit, rollback, CLI and real stdio protocol tests; CI | Cross-agent execution, cloud sync, semantic search |
+## Contents
 
-No private conversations are included. The example is hand-written synthetic data.
-The earlier single-user Cursor prototype is **not** bundled or claimed as native support.
+- [Try it](#try-it)
+- [Install](#install)
+- [CLI](#cli)
+- [MCP](#mcp)
+- [GUI](#gui)
+- [What works / what does not](#what-works--what-does-not)
+- [How it is put together](#how-it-is-put-together)
+- [Contributing](#contributing)
+- [Privacy](#privacy)
+- [FAQ](#faq)
+- [License](#license)
 
-## Try the foundation
+## Try it
 
-Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12+.
-There is **no** PyPI package and **no** signed desktop installer. A local unsigned
-macOS `.app` can be built from `gui/` (not shipped, not a clean-machine install).
-Do not `pip install continuum` (that name is a different PyTorch project). GitHub has a
-prerelease wheel:
-
-```sh
-uv pip install \
-  https://github.com/bosprimigenious/continuum/releases/download/v0.1.0a1/continuum_history-0.1.0a1-py3-none-any.whl
-continuum --help
-```
-
-From a checkout:
+Need [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12+.
 
 ```sh
 git clone https://github.com/bosprimigenious/continuum.git
@@ -59,47 +54,83 @@ cd continuum
 uv sync --locked
 
 uv run continuum --db .continuum/demo.sqlite3 import examples/synthetic.snapshot.json
-uv run continuum --db .continuum/demo.sqlite3 sources
 uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
-uv run continuum --db .continuum/demo.sqlite3 list
 ```
 
-Copy a returned `session_id` from search (or `id` from list):
+You should see one hit whose preview contains `SQLite 数据库锁`. Copy `session_id`, then:
 
 ```sh
 uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
 ```
 
-Pass the returned `next_cursor` with `--cursor` to continue. `null` means the end.
-Rerun the import: it reports `"changed": false`. The input file is never modified.
+Follow `next_cursor` until it is `null`. Import the same file again: `"changed": false`.
+The example file is never modified.
 
-`import` accepts Continuum's normalized snapshot v1 by default. To import one explicitly
-selected Cursor IDE `state.vscdb` (not auto-discovered, not a live-host verification):
+The demo data is hand-written synthetic JSON. There are no private chats in this repository.
+
+## Install
+
+**Do not `pip install continuum`.** That name is an unrelated PyTorch library.
+
+| Channel | Status |
+| --- | --- |
+| GitHub prerelease wheel `v0.1.0a1` | Available |
+| PyPI project `continuum-history` | Not published |
+| Signed desktop installer | Not published |
+| Windows `.exe` | Not built |
+
+From the GitHub release:
+
+```sh
+uv pip install \
+  https://github.com/bosprimigenious/continuum/releases/download/v0.1.0a1/continuum_history-0.1.0a1-py3-none-any.whl
+continuum --help
+```
+
+From a checkout, use `uv run continuum …` as in [Try it](#try-it). The console script is
+`continuum`; the distribution name will be `continuum-history` when it reaches PyPI.
+
+## CLI
+
+All commands take an explicit `--db` path. That file is Continuum's index, never a vendor DB.
+
+```sh
+# Normalized snapshot v1 (default adapter)
+uv run continuum --db .continuum/demo.sqlite3 import examples/synthetic.snapshot.json
+uv run continuum --db .continuum/demo.sqlite3 sources
+uv run continuum --db .continuum/demo.sqlite3 list
+uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
+uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
+```
+
+Search is literal Unicode (including short Chinese). Results return a 240-character **preview**;
+`read` returns full event text. Filters on source/project are exact match, not permissions.
+
+### Cursor `state.vscdb`
+
+One observed IDE shape, not every Cursor store. You pass the file. Continuum does not find it
+for you. Live Cursor installs are **unverified**.
 
 ```sh
 uv run continuum --db .continuum/demo.sqlite3 import \
   --adapter cursor-state-vscdb --source-id cursor-demo PATH/TO/state.vscdb
 ```
 
-Do not commit real Cursor databases. The reader copies the selected file plus WAL/SHM
-sidecars and opens the copy with SQLite `mode=ro`; it does not write the source. A damaged
-capture (`incomplete_source`) leaves any existing index unchanged and does not create a new
-empty `--db`. Other Cursor stores (agent-transcripts JSONL, workspace DBs) are not this adapter.
+`--source-id` is required. The reader copies the main file plus WAL/SHM, then opens the copy
+with SQLite `mode=ro`. A blocked capture (`incomplete_source`) leaves any existing index
+unchanged and does not create a new empty `--db`.
 
-Reusing a `source_id` replaces that source's entire derived snapshot atomically, including
-removing previously indexed events absent from the new snapshot. It is not an archive merge.
-Keep your source files; indexes are disposable derived data.
+Do not commit real Cursor databases. Agent-transcripts JSONL and workspace sidebar DBs are
+not this adapter. Reusing a `source_id` **replaces** that source's derived snapshot; it is
+not an archive merge. Keep the original files. Indexes are disposable.
 
-## Connect an MCP client
+## MCP
 
-Start the stdio server using the same index:
+Same index, four read-only tools. Import is CLI-only.
 
 ```sh
 uv run continuum --db .continuum/demo.sqlite3 serve
 ```
-
-For a host supporting the usual `mcpServers` JSON configuration, adapt this example.
-Replace both paths with absolute paths on your machine; configuration location varies by host.
 
 ```json
 {
@@ -115,72 +146,131 @@ Replace both paths with absolute paths on your machine; configuration location v
 }
 ```
 
-| Tool | Purpose |
+Replace both paths. Host config file locations differ.
+
+| Tool | Does |
 | --- | --- |
-| `history_sources` | Inspect imported sources, counts, snapshot digests and index timestamps |
-| `history_list` | List sessions with exact source/project filters |
-| `history_search` | Search literal text, including short Chinese queries |
-| `history_read` | Read complete events in order, with pagination and references |
+| `history_sources` | Imported sources, counts, digests, timestamps |
+| `history_list` | Sessions, optional source/project filter |
+| `history_search` | Literal substring search |
+| `history_read` | Full events, pagination, `source_ref` |
 
-All four tools query the same local core. They cannot import files, delete source records,
-read arbitrary filesystem paths or launch another agent. SDK stdio interoperability is tested;
-real Codex / Claude Code / Cursor host integration is **not yet verified**.
+There is no import tool, no filesystem path argument, no delete, no “run this in another agent”.
+stdio against the Python SDK is tested. Cursor / Claude Code / Codex **hosts** are not.
 
-**Connecting a client gives it read access to this entire index.** Project filters are not
-access controls. Use separate indexes for different trust boundaries. Text retrieved by an
-agent may be sent to that agent's model provider, even though Continuum has no upload service.
+**A connected client can read the entire selected index.** Project filters are not ACLs.
+Use one index per trust boundary. Text an agent reads may still be sent to that agent's
+model provider. Continuum has no upload service of its own.
 
-## Architecture and stack
+## GUI
 
-```text
-Source adapters → normalized snapshots → local history core → CLI
-                                             │             → MCP (stdio)
-                                         SQLite / FTS5     → GUI (CLI JSON; Vite shell)
+The UI talks to the same CLI JSON interface. It does not parse vendor files or open SQLite
+itself.
+
+**Vite shell** (checkout, not a downloadable app):
+
+```sh
+cd gui
+npm install
+npm run dev
 ```
 
-- **Core:** Python 3.12+, Pydantic v2 contracts, SQLite + FTS5, official MCP Python SDK v2.
-- **Tooling:** uv and a committed lockfile; pytest, Ruff, mypy; GitHub Actions.
-- **GUI:** React + TypeScript + Vite talks to the index through the `continuum` CLI JSON
-  interface (`continuum_history.gui`). Run `npm install && npm run dev` in `gui/` from a
-  checkout. Browser end-to-end tests and Tauri are **not** implemented.
-- **Deployment:** one local modular application. No account, cloud database, vector service,
-  model download or LLM API is needed for the current demo.
+**Desktop** is experimental. This repo can build an **unsigned** macOS `.app` with a
+PyInstaller sidecar of the `continuum` CLI. That artifact is not notarized, not shipped
+in git, and not a clean-machine install. Windows `.exe` is not produced in this tree.
 
-The core must remain independent of MCP, the GUI and vendor formats. Packaging the Python
-core with a desktop shell requires a platform-specific spike before committing to a release.
-See [architecture, trade-offs and migration boundaries](docs/architecture.md).
+```sh
+uv run --with pyinstaller python scripts/build_sidecar.py
+uv run python scripts/smoke_sidecar.py
+cd gui && npm ci && npx tauri build
+```
 
-## Development
+Needs Rust (`rustup`) and Node. Output lands under
+`gui/src-tauri/target/release/bundle/` (gitignored).
+
+## What works / what does not
+
+Pre-alpha. A green foundation gate means the **checkout** works, not that the product is done.
+
+| Works in this repository | Not here yet |
+| --- | --- |
+| Snapshot v1 import, literal search, pagination, source refs | Claude Code / Codex adapters |
+| Cursor `state.vscdb` / `cursorDiskKV` (synthetic fixtures) | Live Cursor host, Cursor JSONL, sidebar DBs |
+| CLI + four read-only MCP tools on one core | Auto-discovery, background refresh |
+| GUI session via CLI JSON; Vite dev; unsigned local macOS `.app` | Browser e2e, signed/notarized installer, Windows `.exe` |
+| GitHub `v0.1.0a1` wheel; CI on Linux / macOS / Windows | PyPI `continuum-history` |
+| Rollback, Unicode, WAL sidecar, stdio tests | Semantic search, attachments as full text, cloud sync |
+
+Native adapter status: **NOT READY** until a named live Cursor/OS/MCP-host combination is recorded.
+GUI status: **NOT READY** until a real browser (or desktop) path is exercised end to end.
+
+## How it is put together
+
+```text
+adapters  →  Snapshot v1  →  HistoryStore (SQLite + FTS5)
+                                  │
+                     CLI JSON ────┼──── MCP stdio (read-only)
+                                  │
+                     GUI / Tauri ─┘  (spawn continuum, no extra API)
+```
+
+One Python core. Clients do not grow a second search engine.
+See [docs/architecture.md](docs/architecture.md) for contracts, rejected alternatives,
+and how a failed import is supposed to behave.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md)
+before changing behavior.
 
 ```sh
 uv sync --locked
 uv run python scripts/check.py
 ```
 
-The aggregate gate checks formatting, lint, strict source typing, tests with a coverage floor,
-basic publication hygiene, wheel/sdist builds, and a wheel installed in an isolated environment.
-It may download build/runtime dependencies. It does not read your native agent history.
+That gate is format, lint, strict mypy, tests (coverage floor 85%), a basic publication
+hygiene scan, wheel/sdist, and an isolated wheel smoke. It may hit the network for build
+dependencies. It does **not** read your private agent history.
 
-CI runs the same gate on Linux, macOS and Windows. A green run validates the **foundation**,
-not native source coverage, a real MCP host, or a packaged app. Read [the next bounded milestone](docs/development.md)
-before adding features. Adapter work starts with synthetic fixtures and failing behavior tests.
-PyPI upload, when enabled, uses GitHub OIDC Trusted Publishing (`publish.yml`); it is still
-blocked until a pending publisher is registered on PyPI.
+Please:
 
-## Scope
+- Start from synthetic fixtures and a failing behavior test.
+- Keep vendor databases read-only.
+- Do not attach real `state.vscdb`, logs, or tokens to issues or PRs.
+- Do not skip a red test or lower the coverage floor to go green.
 
-The first product milestone is reliable read-only history: discover supported local records,
-show coverage and errors, search and read through a GUI or MCP. Start with one Cursor path,
-prove it, then extend to Claude Code and Codex.
+CI runs the same gate on Ubuntu, macOS, and Windows.
 
-Execution orchestration, automatic migration/cleanup, shared cloud memory and model routing
-are out of scope for this milestone. Existing projects are welcome references; novelty is
-not the acceptance criterion. Correctness, understandable boundaries and a complete user path are.
+## Privacy
 
-## Privacy and license
+Indexes are plaintext. There is no automatic secret redaction and no secure-erase guarantee.
+Only import what you are willing to expose to every client connected to that `--db`.
+Details: [SECURITY.md](SECURITY.md).
 
-Local indexes contain plaintext. There is no automatic secret redaction or secure-erasure guarantee.
-Only import material you intend to expose to the connected client. See [SECURITY.md](SECURITY.md).
+## FAQ
 
-[MIT](LICENSE). Continuum is an independent project, not affiliated with any agent vendor.
-The working name does not imply exclusive naming or trademark rights.
+**Why isn't this `pip install continuum`?**
+PyPI already has [continuum](https://pypi.org/project/continuum/), a PyTorch continual-learning
+library. This project will publish as `continuum-history`. Until then, use the GitHub wheel
+or a checkout.
+
+**Does Continuum phone home?**
+No runtime telemetry, hosted sync, or model API. `uv` / `npm` / `cargo` still talk to package
+registries when you install or build.
+
+**Will connecting MCP leak my whole library?**
+The tools can read everything in **that** index. Split indexes if you need split trust.
+Whatever the host does with the text is outside Continuum.
+
+**Can I point `--db` at Cursor's own database?**
+No. `--db` is Continuum's derived index. Pass the vendor file to `import`.
+
+**Is the macOS `.app` a release?**
+No. It is a local packaging spike: unsigned, not notarized, not installed from GitHub Releases.
+
+## License
+
+[MIT](LICENSE). Copyright (c) 2026 Continuum contributors.
+
+Independent project. Not affiliated with Cursor, Anthropic, OpenAI, or any other vendor.
+The name does not claim exclusive trademark rights.

@@ -1,33 +1,80 @@
-# CONTINUUM · 续境
+<div align="center">
+
+<img src="gui/src-tauri/icons/icon.png" width="96" height="96" alt="Continuum">
+
+# Continuum · 续境
 
 **工具可以换，上下文不必重来。**
 
-面向人和 Coding Agent 的本地对话历史底座。[English](README.md)
+给人和 Coding Agent 用的本地对话历史。
+你指定文件，它建成索引；CLI、MCP、GUI 查的是同一份库。
+不改写各家原生会话数据库。
 
-目标很简单：连接获准读取的本机 AI 工具记录，让人通过 GUI 搜索阅读，
-让 Agent 通过 MCP 查询其他工具的历史。保留原文出处，不改写各家的原生会话库。
+[![CI](https://github.com/bosprimigenious/continuum/actions/workflows/ci.yml/badge.svg)](https://github.com/bosprimigenious/continuum/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/bosprimigenious/continuum?include_prereleases)](https://github.com/bosprimigenious/continuum/releases)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
 
-## 当前状态
+[English](README.md) · [架构](docs/architecture.md) · [贡献](CONTRIBUTING.md) · [安全](SECURITY.md) · [Release](https://github.com/bosprimigenious/continuum/releases)
 
-**这是可运行的开源开发地基，不是已经适配三家的完整产品。**
+</div>
 
-已实现：规范化快照 v1、SQLite 原子导入、全文/短中文检索、来源引用、版本绑定分页、
-CLI、4 个只读 MCP 工具、失败回滚测试、真实 stdio 协议测试、构建与 CI、
-Cursor IDE `state.vscdb` 只读导入经 CLI/stdio/隔离 wheel（合成夹具；未做真实宿主验收）、
-以 CLI JSON 为底座的 GUI 会话和 Vite 壳（pytest；未做浏览器端到端）。
+---
 
-未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、浏览器端到端 GUI、
-已签名桌面安装包、Windows `.exe`、干净机器桌面安装、PyPI 上的 `continuum-history`、
-细粒度客户端权限、附件读取、跨 Agent 执行。本机可打出未签名 macOS `.app`（不进 git）。
+Continuum 是一个**本机**索引：你选出已经在磁盘上的对话，导入派生 SQLite，然后搜索、读完、通过 MCP 交给另一个 Agent。
 
-仓库只有人工编写的合成示例，没有私人对话、旧归档、本机配置或凭据。
-之前的个人 Cursor 原型没有直接打包进来。
+它**不会**扫描家目录，**不会**对 Cursor / Claude Code / Codex 的库做写入，也**没有**把对话传到 Continuum 自己的服务器。当前是 pre-alpha：Cursor 路径有合成夹具和门禁，真实宿主未验收；PyPI 尚未上架。
 
-## 跑起来
+## 目录
 
-先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，需要 Python 3.12+。
-**没有** PyPI 包，**没有** 可分发的已签名桌面安装包。不要 `pip install continuum`（那是别人的
-PyTorch 持续学习库）。GitHub prerelease 有 wheel：
+- [先跑起来](#先跑起来)
+- [安装](#安装)
+- [CLI](#cli)
+- [MCP](#mcp)
+- [GUI](#gui)
+- [已实现 / 未实现](#已实现--未实现)
+- [怎么拼起来的](#怎么拼起来的)
+- [参与开发](#参与开发)
+- [隐私](#隐私)
+- [常见问题](#常见问题)
+- [许可](#许可)
+
+## 先跑起来
+
+需要 [uv](https://docs.astral.sh/uv/getting-started/installation/) 和 Python 3.12+。
+
+```sh
+git clone https://github.com/bosprimigenious/continuum.git
+cd continuum
+uv sync --locked
+
+uv run continuum --db .continuum/demo.sqlite3 import examples/synthetic.snapshot.json
+uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
+```
+
+应命中一条预览里带 `SQLite 数据库锁` 的结果。复制 `session_id`：
+
+```sh
+uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
+```
+
+跟着 `next_cursor` 走到 `null`。再导入同一文件会得到 `"changed": false`，示例文件不会被改。
+
+仓库里只有手写合成 JSON，没有私人对话。
+
+## 安装
+
+**不要 `pip install continuum`。** 那个名字是别人的 PyTorch 持续学习库。
+
+| 渠道 | 状态 |
+| --- | --- |
+| GitHub prerelease wheel `v0.1.0a1` | 有 |
+| PyPI 项目名 `continuum-history` | 未发布 |
+| 已签名桌面安装包 | 未发布 |
+| Windows `.exe` | 未构建 |
+
+从 GitHub Release 装：
 
 ```sh
 uv pip install \
@@ -35,76 +82,174 @@ uv pip install \
 continuum --help
 ```
 
-从源码：
+从源码请用上一节的 `uv run continuum …`。命令行入口是 `continuum`；将来上 PyPI 的发行名是 `continuum-history`。
+
+## CLI
+
+所有命令都要显式 `--db`。那是 Continuum 的派生索引，不是厂商库。
 
 ```sh
-git clone https://github.com/bosprimigenious/continuum.git
-cd continuum
-uv sync --locked
 uv run continuum --db .continuum/demo.sqlite3 import examples/synthetic.snapshot.json
-uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
 uv run continuum --db .continuum/demo.sqlite3 sources
 uv run continuum --db .continuum/demo.sqlite3 list
-```
-
-复制搜索返回的 `session_id` 或列表中的 `id`，运行：
-
-```sh
+uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
 uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
 ```
 
-返回的 `next_cursor` 可通过 `--cursor` 继续读取；`null` 表示结束。
-重复导入相同快照得到 `changed: false`，原文件不变。
+搜索是字面 Unicode（含短中文）。命中给 240 字 **preview**；全文只在 `read`。
+按来源 / 项目过滤是精确匹配，不是权限。
 
-默认 `import` 仍只接受 Continuum 快照 v1。显式指定适配器后可导入一份自选的
-Cursor `state.vscdb`（需要 `--source-id`，不会扫描家目录）。读取时复制主库和
-WAL/SHM 再只读打开，不写源文件。结构损坏的采集会 `incomplete_source`，不覆盖已有索引，
-也不会为失败导入新建空 `--db`。真实 Cursor 库不要提交进仓库；JSONL / 工作区库不在
-这一适配器范围内。
+### Cursor `state.vscdb`
 
-相同 `source_id` 的新导入会原子替换该来源的派生索引，不是历史版本并集；
-新快照缺少的旧事件会从索引移除。请保留源文件，不把索引当备份。
+只覆盖一种观察到的 IDE 形态，不是 Cursor 的全部存储。文件路径由你提供，Continuum 不会去找。
+真实 Cursor 安装 **未验收**。
+
+```sh
+uv run continuum --db .continuum/demo.sqlite3 import \
+  --adapter cursor-state-vscdb --source-id cursor-demo PATH/TO/state.vscdb
+```
+
+`--source-id` 必填。读取时复制主库和 WAL/SHM，再 `mode=ro` 打开副本。
+阻塞失败（`incomplete_source`）不会覆盖已有索引，也不会为失败导入新建空 `--db`。
+
+不要把真实 Cursor 库提交进 git。agent-transcripts JSONL、工作区 sidebar DB 不是这个适配器。
+重复使用同一个 `source_id` 会**整份替换**该来源的派生快照，不是历史并集。源文件请自己留着，索引可以扔掉重导。
 
 ## MCP
+
+同一份索引，四只读工具。导入只走 CLI。
 
 ```sh
 uv run continuum --db .continuum/demo.sqlite3 serve
 ```
 
-提供 `history_sources`、`history_list`、`history_search`、`history_read`。
-客户端配置示例见 [英文 README](README.md#connect-an-mcp-client)。
-已经测试 SDK 客户端与真实 stdio 子进程的完整往返；还没有验收三家真实宿主。
+```json
+{
+  "mcpServers": {
+    "continuum": {
+      "command": "uv",
+      "args": [
+        "run", "--locked", "--directory", "/absolute/path/to/continuum",
+        "continuum", "--db", "/absolute/path/to/continuum/.continuum/demo.sqlite3", "serve"
+      ]
+    }
+  }
+}
+```
 
-连接客户端意味着允许它读取**整个指定索引**。项目筛选不是权限隔离；
-不同信任范围请使用不同索引。通过 MCP 交给 Agent 的片段可能进入其模型服务，
-不能把“本地索引”理解成“后续绝不出网”。
+两个路径都换成你机器上的绝对路径。各宿主的配置文件位置不一样。
 
-## 技术路线
+| 工具 | 作用 |
+| --- | --- |
+| `history_sources` | 已导入来源、条数、摘要、时间 |
+| `history_list` | 列会话，可按来源 / 项目过滤 |
+| `history_search` | 字面子串搜索 |
+| `history_read` | 全文、分页、`source_ref` |
 
-- 当前：Python 3.12+、uv、Pydantic v2、SQLite/FTS5、官方 MCP SDK v2。
-- 质量：pytest、Ruff、mypy、锁定依赖、GitHub Actions。
-- GUI：React / TypeScript / Vite，经 `continuum` CLI JSON 访问索引；桌面壳是 Tauri 2 + CLI sidecar（P6-a，未签名 `.app`，Windows `.exe` 未在本机构建）。
-- 架构：模块化单体，一个核心、多种入口；不引入云账号、向量数据库或执行调度服务。
+没有 import 工具，不接受文件系统路径，不能删源，也不能「让另一个 Agent 去执行」。
+对 Python SDK 的 stdio 往返测过；Cursor / Claude Code / Codex **宿主**没测过。
 
-在仓库 `gui/` 目录 `npm install && npm run dev`。这不是桌面安装包，也不在 foundation gate 里跑。
+**连上客户端 = 它可以读完这个索引。** 项目过滤不是 ACL。不同信任范围用不同 `--db`。
+Agent 读到的正文仍可能被宿主发到模型服务。Continuum 自己没有上传通道。
 
-## 开发与完成标准
+## GUI
+
+界面只调 CLI 的 JSON，自己不解析厂商文件、不直接打开 SQLite。
+
+**Vite 开发壳**（要 checkout，不是安装包）：
+
+```sh
+cd gui
+npm install
+npm run dev
+```
+
+**桌面**还是实验性质。本仓库可以打一份**未签名**的 macOS `.app`（PyInstaller 把 `continuum` CLI 冻成 sidecar）。
+没有公证、不进 git、也不是干净机器安装包。Windows `.exe` 这个工作区里还没有。
+
+```sh
+uv run --with pyinstaller python scripts/build_sidecar.py
+uv run python scripts/smoke_sidecar.py
+cd gui && npm ci && npx tauri build
+```
+
+需要 Rust（`rustup`）和 Node。产物在 `gui/src-tauri/target/release/bundle/`（已 gitignore）。
+
+## 已实现 / 未实现
+
+pre-alpha。地基门禁绿只说明 **这份 checkout** 能过，不说明产品做完。
+
+| 仓库里有的 | 还没有 |
+| --- | --- |
+| 快照 v1 导入、字面搜索、分页、出处 | Claude Code / Codex 适配器 |
+| Cursor `state.vscdb` / `cursorDiskKV`（合成夹具） | 真实 Cursor 宿主、JSONL、sidebar DB |
+| CLI + 四只读 MCP，共用一个核心 | 自动发现、后台增量刷新 |
+| GUI 走 CLI JSON；Vite；本机未签名 macOS `.app` | 浏览器 e2e、已签名安装包、Windows `.exe` |
+| GitHub `v0.1.0a1` wheel；Linux / macOS / Windows CI | PyPI `continuum-history` |
+| 回滚、Unicode、WAL 边车、stdio 测试 | 语义搜索、附件全文、云同步 |
+
+原生适配器在记下「具名 Cursor × OS × MCP 宿主」组合之前报 **NOT READY**。
+GUI 在真实浏览器或桌面点选路径走通之前报 **NOT READY**。
+
+## 怎么拼起来的
+
+```text
+adapters  →  Snapshot v1  →  HistoryStore (SQLite + FTS5)
+                                  │
+                     CLI JSON ────┼──── MCP stdio（只读）
+                                  │
+                     GUI / Tauri ─┘  （spawn continuum，没有第二套 API）
+```
+
+一个 Python 核心。客户端不要再长一个搜索引擎。
+契约、否决过的方案、失败导入该怎样，见 [docs/architecture.md](docs/architecture.md)。
+
+## 参与开发
+
+改行为之前先读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [docs/development.md](docs/development.md)。
 
 ```sh
 uv sync --locked
 uv run python scripts/check.py
 ```
 
-统一门禁检查格式、lint、严格类型、测试与覆盖率、基础发布隐私规则、构建和隔离安装。
-它可能下载构建依赖，不会读取本机原生对话。CI 覆盖 Linux / macOS / Windows，
-通过仅代表当前地基，不代表真实 Cursor 宿主、桌面包或 PyPI 已上架。
-PyPI 的预定路径是 GitHub OIDC Trusted Publishing（`publish.yml`），在
-pypi.org 登记 pending publisher 之前保持未发布。
+门禁包括格式、lint、严格 mypy、测试（覆盖率门槛 85%）、基础发布卫生、wheel/sdist、隔离安装冒烟。
+构建时可能出网拉依赖。它**不会**去读你的私人 Agent 历史。
 
-下一步限定为一个可安装、可追溯、能读到末尾的 Cursor 只读适配器，
-再扩其他来源与 GUI。不因为发现竞品而重新扩大或推倒整个范围。
+请：
 
-[架构与取舍](docs/architecture.md) · [开发手册](docs/development.md) ·
-[贡献规范](CONTRIBUTING.md) · [隐私与安全](SECURITY.md)
+- 先写合成夹具和会失败的行为测试；
+- 厂商库保持只读；
+- 不要把真实 `state.vscdb`、日志、token 贴进 issue / PR；
+- 不要靠删测试或降低覆盖率门槛把灯变绿。
 
-MIT 开源。索引明文保存，不承诺自动完整脱敏或安全擦除。独立项目，与各厂商无隶属关系。
+CI 在 Ubuntu、macOS、Windows 上跑同一套门禁。
+
+## 隐私
+
+索引是明文。没有自动脱敏，也没有安全擦除保证。
+只导入你愿意让所有连上该 `--db` 的客户端看到的内容。细节见 [SECURITY.md](SECURITY.md)。
+
+## 常见问题
+
+**为什么不能 `pip install continuum`？**
+PyPI 上已有 [continuum](https://pypi.org/project/continuum/)，是 PyTorch 持续学习库。
+本项目将来的发行名是 `continuum-history`。现在用 GitHub wheel 或源码。
+
+**会不会把对话传到网上？**
+运行时没有遥测、没有托管同步、没有模型 API。`uv` / `npm` / `cargo` 安装构建时仍会访问包仓库。
+
+**接上 MCP 会不会把整库暴露出去？**
+工具能读完**这一份**索引。要隔离就拆索引。宿主拿到正文之后做什么，不在 Continuum 里。
+
+**能把 `--db` 指到 Cursor 自己的库吗？**
+不能。`--db` 只给 Continuum 派生索引。厂商文件走 `import`。
+
+**macOS `.app` 算正式版吗？**
+不算。那是本机打包试验：未签名、未公证、也不从 GitHub Releases 分发。
+
+## 许可
+
+[MIT](LICENSE)。Copyright (c) 2026 Continuum contributors.
+
+独立项目，与 Cursor、Anthropic、OpenAI 等厂商无隶属关系。名称不主张商标专用。
