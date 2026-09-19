@@ -46,6 +46,28 @@ def test_cli_import_search_read_and_error(tmp_path: Path) -> None:
     assert "not_found" in failure.stderr
 
 
+def test_mcp_instructions_are_read_only_index_surface(tmp_path: Path) -> None:
+    server = create_server(HistoryStore(tmp_path / "index.db"))
+    text = server.instructions or ""
+    lowered = text.lower()
+    assert "history_sources" in lowered
+    assert "history_search" in lowered
+    assert "history_read" in lowered
+    assert "import is not an mcp tool" in lowered
+    assert "native discovery is not implemented" in lowered
+    assert "entire selected index" in lowered
+    assert "stale_cursor" in lowered
+    assert "source_ref" in lowered
+    assert "native adapter" in lowered and "not ready" in lowered
+    names = {tool.name for tool in asyncio.run(server.list_tools())}
+    assert names == {
+        "history_sources",
+        "history_list",
+        "history_search",
+        "history_read",
+    }
+
+
 def test_help_does_not_create_database(tmp_path: Path) -> None:
     db = tmp_path / "absent.db"
     result = run_cli("--db", str(db), "--help")
