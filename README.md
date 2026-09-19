@@ -26,11 +26,12 @@ to another agent through MCP—without rewriting a vendor's conversation databas
 | --- | --- |
 | Versioned normalized snapshot contract and synthetic example | Claude Code / Codex adapters; Cursor JSONL transcripts |
 | Atomic SQLite imports, literal Unicode search, source references | Automatic discovery and background incremental updates |
-| Version-bound pagination and explicit errors | Desktop installer / Tauri |
+| Version-bound pagination and explicit errors | Signed desktop installer / notarization |
 | CLI-backed GUI session and Vite shell (pytest only) | Browser e2e, live GUI host |
 | CLI and four read-only stdio MCP tools sharing one core | Fine-grained client permissions and attachment reading |
 | Cursor IDE `state.vscdb` read-only import through CLI/stdio/wheel (synthetic fixtures) | Live Cursor host verification |
-| GitHub prerelease wheel/sdist `v0.1.0a1`; Foundation CI on Linux/macOS/Windows | PyPI `continuum-history`; desktop `.app` / `.exe`; Tauri |
+| GitHub prerelease wheel/sdist `v0.1.0a1`; Foundation CI on Linux/macOS/Windows | PyPI `continuum-history` (OIDC 422: pending publisher missing) |
+| Tauri 2 + CLI sidecar; local unsigned macOS `.app` build artifact | Signed installer; Windows `.exe`; clean-machine desktop install |
 | Unit, rollback, CLI and real stdio protocol tests; CI | Cross-agent execution, cloud sync, semantic search |
 
 No private conversations are included. The example is hand-written synthetic data.
@@ -39,8 +40,10 @@ The earlier single-user Cursor prototype is **not** bundled or claimed as native
 ## Try the foundation
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12+.
-There is **no** PyPI package and **no** desktop installer. Do not `pip install continuum`
-(that name is a different PyTorch project). GitHub has a prerelease wheel:
+There is **no** PyPI package and **no** signed desktop installer. A local unsigned
+macOS `.app` can be built from `gui/` (not shipped, not a clean-machine install).
+Do not `pip install continuum` (that name is a different PyTorch project). GitHub has a
+prerelease wheel:
 
 ```sh
 uv pip install \

@@ -23,10 +23,12 @@ repository; do not change global agent configs or other repositories while worki
   asked to develop. Directly inspect and modify code, not just produce another plan document.
 - Native Cursor path: P0/P1 are in this tree. Next is P2 (live host, explicit authorization),
   then P3, then other sources. P5-a/P5-b GUI shells out to the continuum CLI JSON interface.
-  Do not start P6 Tauri, an HTTP Continuum API, execution orchestration, cloud accounts or a
-  stack rewrite. Do not bump to `0.1.0` or an empty `0.1.0a2`. PyPI uses
-  `.github/workflows/publish.yml` (OIDC); it stays unpublished until a pending publisher
-  is registered. GitHub `v0.1.0a1` wheel is not a desktop app and not PyPI.
+  P6-a started: Tauri 2 + PyInstaller CLI sidecar. A local unsigned macOS `.app` is a
+  build artifact, not a release. Windows `.exe` is CI-only and not built here. Do not add
+  an HTTP Continuum API, Electron, execution orchestration, cloud accounts or a stack rewrite.
+  Do not bump to `0.1.0` or an empty `0.1.0a2`. PyPI uses `.github/workflows/publish.yml`
+  (OIDC); it stays unpublished until a pending publisher is registered (OIDC 422 on
+  2026-09-20). GitHub `v0.1.0a1` wheel is not a desktop app and not PyPI.
 - Run the existing aggregate gate before changes and after implementation. Carry baseline
   failures forward explicitly; do not skip them or lower the coverage floor.
 - Preserve regression coverage for unrelated databases, cursor scope/revision, Unicode output,

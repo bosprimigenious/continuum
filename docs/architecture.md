@@ -24,7 +24,7 @@ worker threads.
 | Storage | stdlib SQLite, WAL, FTS5 trigram | Transactional and rebuildable without another service; short queries scan and large-corpus performance is unmeasured |
 | Agent interface | Official MCP Python SDK v2, stdio | Delegate protocol/version negotiation; do not hand-roll JSON-RPC or blindly echo versions |
 | Human interface | React + TypeScript + Vite over CLI JSON | Search/read UI; `continuum_history.gui.CliBridge` subprocesses `python -m continuum_history`. Browser e2e unverified |
-| Desktop shell | Planned Tauri 2 + Python sidecar | Not started (P6). Do not add Electron in parallel |
+| Desktop shell | Tauri 2 + PyInstaller CLI sidecar | P6-a: unsigned macOS `.app` built locally. Windows NSIS not built here. Do not add Electron |
 | Checks | pytest / Ruff / strict mypy / GitHub Actions | One executable aggregate gate instead of manual green checkmarks |
 
 Do not add Rust to the core, an ORM, a vector database, cloud auth or a workflow engine now.
@@ -103,7 +103,7 @@ stderr with exit 2. `continuum_history.gui` must not import `store` or `adapters
 Allowed GUI commands are `import`, `sources`, `list`, `search`, and `read` — never `serve`.
 The Vite `/__continuum` POST endpoint exists only while `npm run dev` is running and spawns
 that same CLI; Continuum does not ship an HTTP search server. Empty UI state must not create
-an index or walk the home directory. Tauri is P6 and is not this bridge.
+an index or walk the home directory. Tauri P6-a uses the same CLI as a sidecar, not this Vite middleware.
 
 ## Migration and deletion
 
@@ -123,13 +123,14 @@ create a new path, reimport, then retarget CLI/MCP `--db`.
 ## Deliberately deferred
 
 Native source discovery, live Cursor/host verification, agent-transcripts JSONL, Claude Code
-and Codex readers, content-block and media coverage, GUI browser e2e, Tauri packaging, task
-continuity and managed execution. The source adapter and consumer compatibility matrices are
-independent. A working MCP client does not prove that client's native history format can be
-read on a live host. A green GUI pytest suite does not prove the Vite shell in a browser.
+and Codex readers, content-block and media coverage, GUI browser e2e, signed desktop
+distribution, task continuity and managed execution. The source adapter and consumer
+compatibility matrices are independent. A working MCP client does not prove that client's
+native history format can be read on a live host. A green GUI pytest suite does not prove
+the Vite shell in a browser. A local unsigned `.app` does not prove a clean-machine install.
 
 CLI packaging is a pure-Python wheel (`continuum-history` on PyPI when published;
 console script `continuum`). GitHub Releases may carry that wheel before PyPI exists.
 Preferred upload is GitHub OIDC Trusted Publishing, not a long-lived API token in the
-repository. Desktop `.app` / `.exe` are P6 and are not this distribution. The PyPI
+repository. Desktop `.app` / `.exe` are P6 packaging artifacts, not the wheel. The PyPI
 project name `continuum` is taken by an unrelated package; do not reuse it.

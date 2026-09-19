@@ -8,4 +8,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 export default defineConfig({
   plugins: [react(), continuumCliPlugin(repoRoot)],
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
+  clearScreen: false,
 });

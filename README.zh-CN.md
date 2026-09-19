@@ -17,8 +17,8 @@ Cursor IDE `state.vscdb` 只读导入经 CLI/stdio/隔离 wheel（合成夹具�
 以 CLI JSON 为底座的 GUI 会话和 Vite 壳（pytest；未做浏览器端到端）。
 
 未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、浏览器端到端 GUI、
-桌面安装包（无 `.app` / `.exe`）、PyPI 上的 `continuum-history`、细粒度客户端权限、
-附件读取、跨 Agent 执行。
+已签名桌面安装包、Windows `.exe`、干净机器桌面安装、PyPI 上的 `continuum-history`、
+细粒度客户端权限、附件读取、跨 Agent 执行。本机可打出未签名 macOS `.app`（不进 git）。
 
 仓库只有人工编写的合成示例，没有私人对话、旧归档、本机配置或凭据。
 之前的个人 Cursor 原型没有直接打包进来。
@@ -26,7 +26,7 @@ Cursor IDE `state.vscdb` 只读导入经 CLI/stdio/隔离 wheel（合成夹具�
 ## 跑起来
 
 先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，需要 Python 3.12+。
-**没有** PyPI 包，**没有** 桌面安装包。不要 `pip install continuum`（那是别人的
+**没有** PyPI 包，**没有** 可分发的已签名桌面安装包。不要 `pip install continuum`（那是别人的
 PyTorch 持续学习库）。GitHub prerelease 有 wheel：
 
 ```sh
@@ -83,7 +83,7 @@ uv run continuum --db .continuum/demo.sqlite3 serve
 
 - 当前：Python 3.12+、uv、Pydantic v2、SQLite/FTS5、官方 MCP SDK v2。
 - 质量：pytest、Ruff、mypy、锁定依赖、GitHub Actions。
-- GUI：React / TypeScript / Vite，经 `continuum` CLI JSON 访问索引；桌面壳仍是 Tauri 2，未开工。
+- GUI：React / TypeScript / Vite，经 `continuum` CLI JSON 访问索引；桌面壳是 Tauri 2 + CLI sidecar（P6-a，未签名 `.app`，Windows `.exe` 未在本机构建）。
 - 架构：模块化单体，一个核心、多种入口；不引入云账号、向量数据库或执行调度服务。
 
 在仓库 `gui/` 目录 `npm install && npm run dev`。这不是桌面安装包，也不在 foundation gate 里跑。

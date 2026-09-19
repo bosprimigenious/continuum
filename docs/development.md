@@ -33,11 +33,13 @@ without importing the source checkout. Tests must never discover the developer's
 接下来的开发请求应直接检查和修改代码，不要只输出计划（用户明确要求制订计划时除外）。
 原生 Cursor 里程碑仍是下文的只读路径；合成适配器已经存在，
 **P0 与 P1 已在本工作区落地**（见 2026-09-18 证据）。原生路径的下一刀是 **P2：授权范围内的真实来源与 MCP 宿主**；无授权则保持 BLOCKED。
-用户于 2026-09-18 明确要求以 CLI 为底座开始 GUI，**P5-a/P5-b 已开工**。不要开始 P6 Tauri，
-也不要为 GUI 另写解析/搜索或 Continuum HTTP API。
+用户于 2026-09-18 明确要求以 CLI 为底座开始 GUI，**P5-a/P5-b 已开工**。
+用户于 2026-09-20 覆盖「不要开 P6」，要求 macOS `.app` / Windows `.exe` 与 CLI PyPI。
+**P6-a 已开工**（见下文）：本机打出未签名 `Continuum.app`；Windows `.exe` 未在本机构建。
+不要为 GUI 另写解析/搜索或 Continuum HTTP API，不要加 Electron。
 2026-09-19 调研结论：产品架构不改；发布架构改为 **GitHub OIDC Trusted Publishing**
 （见下文）。两条线并行、互不替代：无授权则 P2 保持 BLOCKED；无 PyPI pending publisher
-则 CLI 包不能上 PyPI。不要空升 `0.1.0` / `0.1.0a2`，不要做桌面 `.app` / `.exe`。
+则 CLI 包不能上 PyPI（2026-09-20 OIDC 422 已证实）。不要空升 `0.1.0` / `0.1.0a2`。
 发现竞品可以借鉴实现，
 不因此自行推翻已确定范围、换技术栈或增加另一份产品设计稿。
 
@@ -396,14 +398,51 @@ view 无游标/events、未选源导入仍是 empty、刷新不清阅读状态�
 
 **状态：P5-b 合成视图模型已落地；P5 浏览器端到端未过；GUI NOT READY。**
 
-### 后续阶段（P6 与其余来源当前不启动）
+### P6-a：Tauri 2 + CLI sidecar（2026-09-20，用户覆盖开工）
+
+用户覆盖了「P5 浏览器端到端之后才做 P6」和「不要做桌面包装」。范围是 **P6-a**，
+不是手册 P6 整行（干净机器、签名、升级回滚未做）。
+
+**输入 / 范围：** `gui/src-tauri`（Tauri 2 壳）、`scripts/build_sidecar.py`（PyInstaller
+onefile `continuum` sidecar）、`gui/src/bridge.ts` 在 Tauri 下走 sidecar、在 Vite dev
+下仍走 `/__continuum`。不增加 Continuum HTTP API，不改派生 schema。
+
+**Red：** `uv run pytest tests/test_desktop.py -q` → `FileNotFoundError`
+`gui/src-tauri/tauri.conf.json`。
+
+**Green：** 同命令 `2 passed`。`uv run --with pyinstaller python scripts/build_sidecar.py`
+后 `uv run python scripts/smoke_sidecar.py` → `PASS: sidecar continuum-aarch64-apple-darwin`。
+`npx tauri build`（`gui/`，本机 macOS arm64）产出
+`gui/src-tauri/target/release/bundle/macos/Continuum.app`（约 33M，adhoc 签名）。
+包内 `Contents/MacOS/continuum` 能 import 合成快照并命中「数据库锁」。
+
+**聚合门禁** `uv run python scripts/check.py`（亲自跑，macOS / Python 3.12.13）：
+
+| 检查 | 实际输出 |
+| --- | --- |
+| Ruff format / lint | `35 files already formatted` / `All checks passed!` |
+| mypy | `Success: no issues found in 13 source files` |
+| pytest | `88 passed`；总覆盖率 `92.31%`，门槛仍为 `85%` |
+| 发布卫生检查 | `PASS: basic publication hygiene (73 files)` |
+| wheel / sdist | 构建成功 |
+| 隔离 wheel 安装 | `PASS: installed wheel 0.1.0a1` |
+| 聚合门禁 | `PASS: foundation gate (native adapters, GUI and real hosts are NOT verified)` |
+
+未验证：打开 `.app` 点选路径、窄屏、代码签名/公证、干净机器安装、Windows NSIS `.exe`、
+升级失败回滚、浏览器 e2e。`.app` 在 `target/` 下，不进 git。Windows 包需要
+`.github/workflows/desktop.yml` 在 push 后跑；本会话未 push。
+
+**状态：P6-a 本机 unsigned macOS `.app` 已打出；P6 整行未过；GUI NOT READY；
+Windows `.exe` 未产出；完整产品 NOT READY。**
+
+### 后续阶段（P4 与 P6 整行）
 
 | 顺序 / 依赖 | 有界交付 | 完成标准 |
 | --- | --- | --- |
 | P4a，P3 后 | Claude Code 的一种明确格式，只读显式导入；必要时将 coverage 从 Cursor 专用约束扩展到各适配器，保留旧快照兼容 | 自有合成契约、失败与幂等测试、安装包/stdio 链路、具名真实来源与宿主核对；不靠 Cursor 测试验收 |
 | P4b，P4a 后 | Codex 的一种明确格式，同样复用 Snapshot / HistoryStore | 重走 P4a 门禁，并测试多来源相同文本不串身份、source/project 过滤和独立刷新 |
 | P5，P4b 后（P5-a 已按用户请求提前开工） | React + TypeScript + Vite 的来源选择、覆盖状态、搜索和完整阅读页面；通过 CLI JSON 薄桥调用 Python 核心 | 合成路径的空态/错误/过期游标/长中文已有 pytest；**完整 P5 仍要浏览器端到端**。P5-a 证据见上节 |
-| P6，P5 后 | Tauri 2 + Python sidecar 在一个目标平台的打包验证，再决定扩展平台 | 无开发环境的干净机器安装，核心启动/关闭无残留，搜索读取可用，升级失败可回到上一安装与索引；签名、分发和发布门禁单独验证 |
+| P6，P5 后（P6-a 已按用户请求提前开工） | Tauri 2 + CLI sidecar 在一个目标平台的打包验证，再决定扩展平台 | P6-a：本机 unsigned `.app` + sidecar 烟测。完整 P6 仍要干净机器安装、启动/关闭无残留、签名与升级回滚 |
 
 P5 首版用显式选择和手动全量快照刷新。自动发现只能在用户选择目录后提出候选；
 后台增量更新等到实测全量刷新耗时/内存后再立项，不能因“以后会大”引入队列或守护进程。
@@ -508,9 +547,24 @@ MCP stdio、GUI 只做 CLI 子进程；不引入 Continuum HTTP、不并行 Elec
 更安全的默认：pending publisher 未配、P2 未授权时，停在文档与工作流骨架，不发版、不读真源。
 两者冲突时跟工程选择：假 live 和空版本号都不能有；PyPI 可以晚。
 
-明确不做：桌面包装、把 foundation 绿写成平台产品支持、为发版重写解析器、
-新增第二份产品计划文件。中枢 skill `continuum-history` 仍写「当前刀是 P0」，
-以本手册为准；skill 仓库不在这一次主仓库范围内改。
+明确不做（2026-09-19 当时）：桌面包装、把 foundation 绿写成平台产品支持、为发版重写解析器、
+新增第二份产品计划文件。2026-09-20 用户覆盖桌面包装，见上文 P6-a。
+中枢 skill 以本手册为准；skill 仓库不在这一次主仓库范围内改。
+
+### 2026-09-20 PyPI 实跑（未上架）
+
+`gh workflow run "Publish CLI to PyPI" --ref main` → run `35454466719`。
+build job 成功；publish job 失败：
+
+```
+error: Failed to obtain token for trusted publishing
+Caused by: ... 422 ... "invalid-publisher"
+"valid token, but no corresponding publisher (Publisher with matching claims was not found)"
+```
+
+OIDC claims 已匹配仓库 `bosprimigenious/continuum`、workflow `publish.yml`、environment `pypi`。
+阻塞在 pypi.org 尚未登记 pending publisher。`https://pypi.org/pypi/continuum-history/json`
+仍 404。`UV_PUBLISH_TOKEN` 仍 unset。不要为重试而 bump `0.1.0a1`。
 
 ### 回滚
 

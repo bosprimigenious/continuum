@@ -1,0 +1,18 @@
+{
+  "identifier": "default",
+  "description": "Main window may execute the bundled continuum CLI sidecar only",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "args": true,
+          "name": "binaries/continuum",
+          "sidecar": true
+        }
+      ]
+    }
+  ]
+}

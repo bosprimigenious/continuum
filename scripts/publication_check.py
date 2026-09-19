@@ -29,6 +29,8 @@ for name in sorted(set(filter(None, paths))):
         bad.append((name, "private-data/archive file type"))
     if path.name == ".env" or path.name.startswith(".env."):
         bad.append((name, "environment file"))
+    if path.suffix.lower() in {".png", ".ico", ".icns", ".jpg", ".jpeg", ".webp"}:
+        continue
     content = path.read_text(encoding="utf-8")
     if any(pattern.search(content) for pattern in patterns):
         bad.append((name, "possible private path/credential"))
