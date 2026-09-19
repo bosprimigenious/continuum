@@ -127,3 +127,9 @@ and Codex readers, content-block and media coverage, GUI browser e2e, Tauri pack
 continuity and managed execution. The source adapter and consumer compatibility matrices are
 independent. A working MCP client does not prove that client's native history format can be
 read on a live host. A green GUI pytest suite does not prove the Vite shell in a browser.
+
+CLI packaging is a pure-Python wheel (`continuum-history` on PyPI when published;
+console script `continuum`). GitHub Releases may carry that wheel before PyPI exists.
+Preferred upload is GitHub OIDC Trusted Publishing, not a long-lived API token in the
+repository. Desktop `.app` / `.exe` are P6 and are not this distribution. The PyPI
+project name `continuum` is taken by an unrelated package; do not reuse it.

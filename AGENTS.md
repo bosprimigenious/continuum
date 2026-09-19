@@ -24,7 +24,9 @@ repository; do not change global agent configs or other repositories while worki
 - Native Cursor path: P0/P1 are in this tree. Next is P2 (live host, explicit authorization),
   then P3, then other sources. P5-a/P5-b GUI shells out to the continuum CLI JSON interface.
   Do not start P6 Tauri, an HTTP Continuum API, execution orchestration, cloud accounts or a
-  stack rewrite.
+  stack rewrite. Do not bump to `0.1.0` or an empty `0.1.0a2`. PyPI uses
+  `.github/workflows/publish.yml` (OIDC); it stays unpublished until a pending publisher
+  is registered. GitHub `v0.1.0a1` wheel is not a desktop app and not PyPI.
 - Run the existing aggregate gate before changes and after implementation. Carry baseline
   failures forward explicitly; do not skip them or lower the coverage floor.
 - Preserve regression coverage for unrelated databases, cursor scope/revision, Unicode output,

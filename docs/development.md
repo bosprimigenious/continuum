@@ -35,6 +35,9 @@ without importing the source checkout. Tests must never discover the developer's
 **P0 与 P1 已在本工作区落地**（见 2026-09-18 证据）。原生路径的下一刀是 **P2：授权范围内的真实来源与 MCP 宿主**；无授权则保持 BLOCKED。
 用户于 2026-09-18 明确要求以 CLI 为底座开始 GUI，**P5-a/P5-b 已开工**。不要开始 P6 Tauri，
 也不要为 GUI 另写解析/搜索或 Continuum HTTP API。
+2026-09-19 调研结论：产品架构不改；发布架构改为 **GitHub OIDC Trusted Publishing**
+（见下文）。两条线并行、互不替代：无授权则 P2 保持 BLOCKED；无 PyPI pending publisher
+则 CLI 包不能上 PyPI。不要空升 `0.1.0` / `0.1.0a2`，不要做桌面 `.app` / `.exe`。
 发现竞品可以借鉴实现，
 不因此自行推翻已确定范围、换技术栈或增加另一份产品设计稿。
 
@@ -443,25 +446,105 @@ scripts/             aggregate gate and installed-wheel checks
 Use the lockfile. Keep native-format interpretation in adapters and transport behavior in
 facades. Do not copy local paths, credentials, raw user messages or personal agent instructions.
 
+## 2026-09-19 发布与下一刀（调研后锁定）
+
+本次是手册维护，不读取个人历史，不打新 tag，不把产品升成 READY。
+
+现场（亲自核对，2026-09-19）：
+
+| 项 | 证据 | 状态 |
+| --- | --- | --- |
+| 代码版本 | `main` `17f6bf9`，tag `v0.1.0a1`，工作区当时干净 | 已打 GitHub prerelease |
+| GitHub 资产 | `continuum_history-0.1.0a1-py3-none-any.whl` 与 sdist | 有；不是桌面包 |
+| Foundation CI | `macos-latest/3.12`、`windows-latest/3.12`、`ubuntu-latest/3.12` 与 `3.14` success | CLI 地基绿；不是 live 宿主绿 |
+| PyPI `continuum-history` | `https://pypi.org/pypi/continuum-history/json` → 404；隔离 venv `uv pip install` 解析失败 | **未发布** |
+| 本机 `UV_PUBLISH_TOKEN` | unset；无 `.pypirc` | 本地上传脚本 exit 2 |
+| PyPI 名 `continuum` | 已被他人占用（PyTorch continual learning 1.2.7，https://pypi.org/project/continuum/） | **禁止** `pip install continuum` |
+| `.app` / `.exe` / Tauri | 仓库无 `tauri.conf.json`、无桌面产物 | 未开工（P6） |
+| 原生适配器 | P0/P1 合成；P2 无授权 | **NOT READY** |
+| GUI | P5-a/b pytest；无浏览器 e2e | **NOT READY** |
+
+### 选定的架构（推荐，不是对照表）
+
+产品架构维持 [architecture.md](architecture.md) 已接受的决定：一个 Python 核心、CLI JSON、
+MCP stdio、GUI 只做 CLI 子进程；不引入 Continuum HTTP、不并行 Electron、不在 P5 浏览器
+端到端之前做 Tauri。
+
+发布架构：**更强的工程选择是 GitHub Actions OIDC Trusted Publishing**，工作流
+`.github/workflows/publish.yml`。build 与 publish 分 job，只有 publish 有 `id-token: write`，
+`uv publish --trusted-publishing always`。GitHub Environment 名锁定为 `pypi`。
+长期 `UV_PUBLISH_TOKEN` 只作本机后备（`scripts/publish_cli.py`），当前未设置，**不是默认**。
+
+两条线同时成立、谁也不替代谁：
+
+1. **包装线（0.1.0a1 上 PyPI）** — 不改版本号。外部依赖：维护者在
+   https://pypi.org/manage/account/publishing/ 登记 **pending publisher**（包尚未存在，
+   必须用 pending，不能在项目页加 publisher）。字段必须与工作流一致，填错等于把上传权
+   交给错误仓库：
+
+   | 字段 | 锁定值 |
+   | --- | --- |
+   | PyPI project name | `continuum-history` |
+   | Owner | `bosprimigenious` |
+   | Repository | `continuum` |
+   | Workflow filename | `publish.yml` |
+   | Environment name | `pypi` |
+
+   配好后：对已有 `v0.1.0a1` 在 Actions 里 **workflow_dispatch** 跑 `Publish CLI to PyPI`，
+   或以后每次 `gh release create` 自动触发。不要为了发 PyPI 再 bump 一版空 tag。
+   首次成功上传会创建 PyPI 项目并把 pending 转成正式 publisher。
+   验证：隔离 venv `uv pip install 'continuum-history==0.1.0a1'`（alpha 可能需要
+   `--prerelease`），`continuum --help` 打印入口；再查
+   `https://pypi.org/pypi/continuum-history/0.1.0a1/json` 非 404。
+   PyPI 上有 CLI **不等于** native adapter READY，也不等于有桌面安装包。
+
+2. **产品线（下一刀 P2 → 才允许 `0.1.0a2`）** — 进入条件不变：用户点名
+   `CURSOR_SOURCE`、新的 `CONTINUUM_INDEX`、MCP 宿主、约定非敏感标记，并明确授权
+   「导入这一份库的全部受支持会话」。本调研和文档整理 **不构成** 该授权。
+   无授权保持 BLOCKED。失败回 P0/P1 补合成回归。P3 仍在 P2 之后。
+   有实质改动并过门禁后才 bump `pyproject.toml` / `uv.lock` /
+   `mcp_server` 版本到 `0.1.0a2`。不要把 `0.1.0a1` 改成 `0.1.0`。
+
+更安全的默认：pending publisher 未配、P2 未授权时，停在文档与工作流骨架，不发版、不读真源。
+两者冲突时跟工程选择：假 live 和空版本号都不能有；PyPI 可以晚。
+
+明确不做：桌面包装、把 foundation 绿写成平台产品支持、为发版重写解析器、
+新增第二份产品计划文件。中枢 skill `continuum-history` 仍写「当前刀是 P0」，
+以本手册为准；skill 仓库不在这一次主仓库范围内改。
+
+### 回滚
+
+- 未上传：删/停 `publish.yml` 不影响已发布的 GitHub `v0.1.0a1`。
+- 已上传到 PyPI：不能删除已发布文件；只能再发更高版本。yank 需维护者在 PyPI 操作，
+  不在本仓库脚本里做。
+- 工作流失败（pending publisher 未配、OIDC 不匹配）：保持 GitHub 资产，不降版本、不改 schema。
+
 ## Release checklist
 
-CLI-only PyPI (`continuum` console script). No desktop installer, no GUI.
+CLI-only PyPI project name `continuum-history`（console script 仍是 `continuum`）。
+No desktop installer, no GUI in the wheel.
+
+Preferred (OIDC; no long-lived token in the repo or maintainer shell):
+
+1. Confirm `pyproject.toml` version matches the Git tag (`0.1.0a1` today).
+2. Confirm Foundation CI on that commit is green (Linux/macOS/Windows).
+3. Maintainer registers the pending publisher with the locked fields above.
+4. Dispatch `.github/workflows/publish.yml` or publish a GitHub Release.
+5. Verify PyPI JSON and an isolated `uv pip install` of **this** project name.
+
+Local-token fallback (weaker; do not commit the token):
 
 ```sh
 uv run python scripts/check.py
 uv run python scripts/release_check.py
-# Requires UV_PUBLISH_TOKEN in the environment. Do not commit the token.
+# Requires UV_PUBLISH_TOKEN in the environment.
 uv run python scripts/publish_cli.py
 ```
 
-- Run the aggregate gate on the commit being published; inspect its full output.
-- Review `git diff --cached` and `git ls-files`; no real logs, databases or private paths.
-- Verify CI on the supported foundation matrix; keep live/native checks separate.
-- Ensure both READMEs describe implemented, planned and unverified capabilities accurately.
 - `release_check.py` inspects the wheel for `continuum = continuum_history.cli:main` and
   rejects sqlite/env files. `publish_cli.py` refuses to upload if `UV_PUBLISH_TOKEN` is unset.
-- First public version should be an alpha (`0.1.0a1`), not `0.1.0` and not an undeclared
-  `.dev0` that users only see with `--pre`. Bump `pyproject.toml` before a real upload.
+- First public version is the existing alpha `0.1.0a1`, not `0.1.0` and not an undeclared
+  `.dev0`. Do not bump the version solely to retry PyPI.
 - Follow [SECURITY.md](../SECURITY.md); automated hygiene checks are not a full secret audit.
 
 A PyPI CLI upload does not make the native adapter or product READY.

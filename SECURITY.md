@@ -24,6 +24,10 @@ Use a dedicated new index path. Never point `--db` at an agent's native database
 checks its application ID/schema but cannot protect against malicious same-user filesystem races.
 For different trust boundaries, launch separate processes with separate indexes.
 
+Do not commit PyPI tokens, `.pypirc`, or `UV_PUBLISH_TOKEN`. The preferred upload path is
+GitHub OIDC Trusted Publishing (short-lived credentials). A long-lived token in the
+maintainer environment is a fallback only.
+
 ## Reporting a vulnerability
 
 Use this repository's **Security → Report a vulnerability** private reporting form when enabled.

@@ -1,4 +1,9 @@
-"""Upload the CLI wheel to PyPI. Fails closed without UV_PUBLISH_TOKEN."""
+"""Local-token fallback for CLI/PyPI upload. Preferred path is GitHub OIDC.
+
+The default publish architecture is `.github/workflows/publish.yml` with PyPI
+Trusted Publishing. This script is only for an already-exported UV_PUBLISH_TOKEN
+on a maintainer machine. It does not mint OIDC credentials.
+"""
 
 import os
 import subprocess
@@ -7,7 +12,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if not os.environ.get("UV_PUBLISH_TOKEN"):
-    print("NOT READY: UV_PUBLISH_TOKEN is unset; refusing to upload", file=sys.stderr)
+    print(
+        "NOT READY: UV_PUBLISH_TOKEN is unset; refusing local upload. "
+        "Preferred path: GitHub release → workflow publish.yml (OIDC). "
+        "See docs/development.md.",
+        file=sys.stderr,
+    )
     raise SystemExit(2)
 
 

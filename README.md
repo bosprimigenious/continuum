@@ -30,6 +30,7 @@ to another agent through MCP—without rewriting a vendor's conversation databas
 | CLI-backed GUI session and Vite shell (pytest only) | Browser e2e, live GUI host |
 | CLI and four read-only stdio MCP tools sharing one core | Fine-grained client permissions and attachment reading |
 | Cursor IDE `state.vscdb` read-only import through CLI/stdio/wheel (synthetic fixtures) | Live Cursor host verification |
+| GitHub prerelease wheel/sdist `v0.1.0a1`; Foundation CI on Linux/macOS/Windows | PyPI `continuum-history`; desktop `.app` / `.exe`; Tauri |
 | Unit, rollback, CLI and real stdio protocol tests; CI | Cross-agent execution, cloud sync, semantic search |
 
 No private conversations are included. The example is hand-written synthetic data.
@@ -38,7 +39,16 @@ The earlier single-user Cursor prototype is **not** bundled or claimed as native
 ## Try the foundation
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12+.
-Run from a checkout; no package has been published to PyPI and no desktop release exists.
+There is **no** PyPI package and **no** desktop installer. Do not `pip install continuum`
+(that name is a different PyTorch project). GitHub has a prerelease wheel:
+
+```sh
+uv pip install \
+  https://github.com/bosprimigenious/continuum/releases/download/v0.1.0a1/continuum_history-0.1.0a1-py3-none-any.whl
+continuum --help
+```
+
+From a checkout:
 
 ```sh
 git clone https://github.com/bosprimigenious/continuum.git
@@ -149,8 +159,10 @@ basic publication hygiene, wheel/sdist builds, and a wheel installed in an isola
 It may download build/runtime dependencies. It does not read your native agent history.
 
 CI runs the same gate on Linux, macOS and Windows. A green run validates the **foundation**,
-not native source coverage or real-host compatibility. Read [the next bounded milestone](docs/development.md)
+not native source coverage, a real MCP host, or a packaged app. Read [the next bounded milestone](docs/development.md)
 before adding features. Adapter work starts with synthetic fixtures and failing behavior tests.
+PyPI upload, when enabled, uses GitHub OIDC Trusted Publishing (`publish.yml`); it is still
+blocked until a pending publisher is registered on PyPI.
 
 ## Scope
 

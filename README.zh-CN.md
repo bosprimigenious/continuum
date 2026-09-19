@@ -17,7 +17,8 @@ Cursor IDE `state.vscdb` 只读导入经 CLI/stdio/隔离 wheel（合成夹具�
 以 CLI JSON 为底座的 GUI 会话和 Vite 壳（pytest；未做浏览器端到端）。
 
 未实现：Claude Code / Codex 读取器、Cursor JSONL 与自动发现、实时更新、浏览器端到端 GUI、
-桌面安装包、细粒度客户端权限、附件读取、跨 Agent 执行。
+桌面安装包（无 `.app` / `.exe`）、PyPI 上的 `continuum-history`、细粒度客户端权限、
+附件读取、跨 Agent 执行。
 
 仓库只有人工编写的合成示例，没有私人对话、旧归档、本机配置或凭据。
 之前的个人 Cursor 原型没有直接打包进来。
@@ -25,7 +26,16 @@ Cursor IDE `state.vscdb` 只读导入经 CLI/stdio/隔离 wheel（合成夹具�
 ## 跑起来
 
 先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，需要 Python 3.12+。
-当前从源码运行，未发布 PyPI 包或桌面版本。
+**没有** PyPI 包，**没有** 桌面安装包。不要 `pip install continuum`（那是别人的
+PyTorch 持续学习库）。GitHub prerelease 有 wheel：
+
+```sh
+uv pip install \
+  https://github.com/bosprimigenious/continuum/releases/download/v0.1.0a1/continuum_history-0.1.0a1-py3-none-any.whl
+continuum --help
+```
+
+从源码：
 
 ```sh
 git clone https://github.com/bosprimigenious/continuum.git
@@ -87,7 +97,9 @@ uv run python scripts/check.py
 
 统一门禁检查格式、lint、严格类型、测试与覆盖率、基础发布隐私规则、构建和隔离安装。
 它可能下载构建依赖，不会读取本机原生对话。CI 覆盖 Linux / macOS / Windows，
-通过仅代表当前地基，不代表全量迁移完成或所有客户端兼容。
+通过仅代表当前地基，不代表真实 Cursor 宿主、桌面包或 PyPI 已上架。
+PyPI 的预定路径是 GitHub OIDC Trusted Publishing（`publish.yml`），在
+pypi.org 登记 pending publisher 之前保持未发布。
 
 下一步限定为一个可安装、可追溯、能读到末尾的 Cursor 只读适配器，
 再扩其他来源与 GUI。不因为发现竞品而重新扩大或推倒整个范围。
