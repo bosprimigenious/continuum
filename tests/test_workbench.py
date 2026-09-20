@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -47,11 +47,14 @@ def test_config_dir_uses_os_conventions_not_hardcoded_users() -> None:
     assert mac == Path("/tmp/fake-home") / "Library" / "Application Support" / "Continuum"
     assert win == Path("C:/AppData/Roaming") / "Continuum"
     assert linux == Path("/tmp/fake-home") / ".config" / "continuum"
-    joined = "\n".join(str(path) for path in (mac, win, linux))
-    assert "fake-home/Library" in str(mac)
-    assert "Roaming" in str(win)
-    assert ".config" in str(linux)
+    # windows-latest str(Path) uses backslash (Foundation CI 35487319278).
+    assert "fake-home/Library" not in str(PureWindowsPath(mac.as_posix()))
+    joined = "\n".join(path.as_posix() for path in (mac, win, linux))
+    assert "fake-home/Library" in mac.as_posix()
+    assert "Roaming" in win.as_posix()
+    assert ".config" in linux.as_posix()
     assert "Application Support" in joined
+    assert "/Users/" not in joined
 
 
 def test_save_settings_writes_json_only_when_asked(tmp_path: Path) -> None:

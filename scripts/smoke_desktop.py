@@ -94,6 +94,14 @@ def find_gui() -> Path | None:
     return None
 
 
+def sidecar_beside(gui: Path) -> Path | None:
+    for name in ("continuum.exe", "continuum"):
+        path = gui.parent / name
+        if path.is_file():
+            return path
+    return None
+
+
 def find_bundled_sidecar() -> Path | None:
     for path in (
         RELEASE / "continuum.exe",
@@ -137,12 +145,18 @@ def install_nsis(setup: Path) -> Path | None:
     if not local:
         return None
     base = Path(local)
-    for path in (
-        base / "Continuum" / "Continuum.exe",
-        base / "com.github.bosprimigenious.continuum" / "Continuum.exe",
-    ):
-        if path.is_file():
-            return path
+    folders = (
+        base / "Continuum",
+        base / "Programs" / "Continuum",
+        base / "com.github.bosprimigenious.continuum",
+        base / "continuum-gui",
+    )
+    names = ("Continuum.exe", "continuum-gui.exe")
+    for folder in folders:
+        for name in names:
+            path = folder / name
+            if path.is_file():
+                return path
     return None
 
 
@@ -168,8 +182,8 @@ def main() -> None:
             print(f"nsis {nsis}")
             installed = install_nsis(nsis)
             if installed is not None:
-                installed_sidecar = installed.parent / "continuum.exe"
-                if installed_sidecar.is_file():
+                installed_sidecar = sidecar_beside(installed)
+                if installed_sidecar is not None:
                     query_sidecar(installed_sidecar)
                 start_gui(installed)
                 return

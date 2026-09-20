@@ -138,3 +138,48 @@ def test_piped_search_stays_json_for_gui_bridge(tmp_path: Path) -> None:
     result = run_cli("--db", str(db), "search", "数据库锁")
     payload = json.loads(result.stdout)
     assert payload["items"][0]["session_id"]
+
+
+def _legacy_stdio_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "cp1252"
+    env["PYTHONUTF8"] = "0"
+    return env
+
+
+def test_help_survives_cp1252_stdio() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "continuum_history", "--help"],
+        env=_legacy_stdio_env(),
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    stdout = result.stdout.decode("utf-8")
+    assert "search" in stdout
+    assert "数据库锁" in stdout
+
+
+def test_text_search_survives_cp1252_stdio(tmp_path: Path) -> None:
+    db = tmp_path / "index.db"
+    assert run_cli("--db", str(db), "import", str(EXAMPLE)).returncode == 0
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "continuum_history",
+            "--format",
+            "text",
+            "--db",
+            str(db),
+            "search",
+            "数据库锁",
+        ],
+        env=_legacy_stdio_env(),
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    assert "数据库锁" in result.stdout.decode("utf-8")

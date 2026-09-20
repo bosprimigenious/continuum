@@ -503,23 +503,32 @@ import / sources / list / search「数据库锁」/ read 均 HTTP 200。WKWebVie
 范围：`desktop.yml` 在 `windows-latest` 打 NSIS；sidecar 与 GUI 桥强制 `--format json`
 （避免 Windows 控制台被当成 TTY 打出文本）；安装包 `currentUser` + 嵌入 WebView2
 bootstrapper。`scripts/smoke_desktop.py` 在 Windows 上：打包 sidecar 查询合成夹具、
-静默安装、启动 `Continuum.exe`。本机是 macOS，不能执行 PE。
+静默安装、启动 GUI。本机是 macOS，不能执行 PE。
 
-**Green（origin/main，workflow_dispatch `35486634857`）：**
-Windows 作业 7m22s 成功。PyInstaller 写出
-`continuum-x86_64-pc-windows-msvc.exe`；`npx tauri build` 写出
-`gui/src-tauri/target/release/continuum-gui.exe` 与
-`bundle/nsis/Continuum_0.1.0-alpha.1_x64-setup.exe`（本机下载 25M）。
+**Green（旧 main，workflow_dispatch `35486634857`）：**
+Windows 作业 7m22s 成功。打出
+`bundle/nsis/Continuum_0.1.0-alpha.1_x64-setup.exe`（约 25M）。
 该 run **没有**跑 sidecar 查询，也 **没有**启动 GUI。
 
-**本工作区：** `uv run pytest tests/test_desktop.py tests/test_gui.py tests/test_workbench.py -q`
-→ `23 passed`。新的 `smoke_sidecar` / `smoke_desktop` 步骤还在未推送的 `desktop.yml` 里。
+**Red（`4e70c75`）：**
+
+- Foundation CI `35487319278`：ubuntu/macOS 绿；windows-latest `check.py` 4 failed /
+  98 passed / 1 skipped。三项是同一 `charmap`：`--help` 与 `--format text` 打印
+  「数据库锁」。第四项 `test_config_dir_uses_os_conventions_not_hardcoded_users`
+  用 `'fake-home/Library' in str(mac)`，Windows `str(Path)` 是反斜杠。
+- Desktop packages `35487319249`：macos-latest 成功；windows-latest 在
+  `smoke_sidecar.py --help` 同一 `charmap`。冻结 sidecar 忽略 GHA 的
+  `PYTHONUTF8=1`。NSIS 与 `smoke_desktop` 被 skip。
+- PyPI 已与 exe 无关：`35499334869` 把 `continuum-history==0.1.0a1` 发上去了。
+
+**本提交：** CLI 启动时 `reconfigure(encoding="utf-8")`；配置目录断言改
+`as_posix()`。本机用 `PYTHONIOENCODING=cp1252` 复现 help/text 的 traceback 后转绿。
+Windows 启动 / 接入 / 查询仍要等这一轮 `windows-latest`。
 
 未验证：Windows 上双击安装包、窗口点选、sidecar 接入、搜索「数据库锁」、签名、
-干净机器、ARM Windows。当前 dirty tree（grok-app 页面、`--format json`）不在
-`35486634857` 的安装包里。
+干净机器、ARM Windows。
 
-**状态：Windows NSIS 能在 CI 打出；启动 / 接入 / 查询 NOT READY。**
+**状态：Windows NSIS 曾打出过；启动 / 接入 / 查询 NOT READY。**
 
 ### Skill 合成路径（2026-09-20）
 

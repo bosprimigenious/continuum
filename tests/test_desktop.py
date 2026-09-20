@@ -72,4 +72,10 @@ def test_windows_nsis_bundle_smokes_sidecar_json_and_current_user_install() -> N
     smoke = (ROOT / "scripts" / "smoke_desktop.py").read_text(encoding="utf-8")
     assert "数据库锁" in smoke
     assert "LOCALAPPDATA" in smoke
+    assert "Programs" in smoke
+    assert "continuum-gui.exe" in smoke
     assert "taskkill" in smoke
+    sidecar_smoke = (ROOT / "scripts" / "smoke_sidecar.py").read_text(encoding="utf-8")
+    assert '"--help"' in sidecar_smoke
+    cli = (ROOT / "src" / "continuum_history" / "cli.py").read_text(encoding="utf-8")
+    assert 'reconfigure(encoding="utf-8"' in cli
