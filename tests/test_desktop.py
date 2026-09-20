@@ -56,6 +56,7 @@ def test_windows_nsis_bundle_smokes_sidecar_json_and_current_user_install() -> N
     assert "bundle: nsis" in workflow
     assert "scripts/smoke_sidecar.py" in workflow
     assert "scripts/smoke_desktop.py" in workflow
+    assert "if: always()" in workflow
     conf = json.loads(TAURI_CONF.read_text(encoding="utf-8"))
     windows = conf["bundle"]["windows"]
     assert windows["nsis"]["installMode"] == "currentUser"
@@ -75,6 +76,7 @@ def test_windows_nsis_bundle_smokes_sidecar_json_and_current_user_install() -> N
     assert "Programs" in smoke
     assert "continuum-gui.exe" in smoke
     assert "taskkill" in smoke
+    assert "gui exited" in smoke or "start " in smoke
     sidecar_smoke = (ROOT / "scripts" / "smoke_sidecar.py").read_text(encoding="utf-8")
     assert '"--help"' in sidecar_smoke
     cli = (ROOT / "src" / "continuum_history" / "cli.py").read_text(encoding="utf-8")

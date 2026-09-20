@@ -114,15 +114,24 @@ def find_bundled_sidecar() -> Path | None:
 
 
 def start_gui(exe: Path, seconds: float = 8.0) -> None:
+    print(f"start {exe}")
+    for child in sorted(exe.parent.iterdir()):
+        print(f"  {child.name}")
     proc = subprocess.Popen(
         [str(exe)],
         cwd=str(exe.parent),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     time.sleep(seconds)
     code = proc.poll()
     if code is not None:
+        out, err = proc.communicate(timeout=5)
+        print(out)
+        print(err, file=sys.stderr)
         raise SystemExit(f"gui exited {code}")
     if platform.system() == "Windows":
         subprocess.run(
