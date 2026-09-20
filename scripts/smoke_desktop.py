@@ -84,7 +84,8 @@ def find_nsis() -> Path | None:
 
 
 def find_gui() -> Path | None:
-    for name in ("Continuum.exe", "continuum-gui.exe", "Continuum"):
+    # Windows is case-insensitive: Continuum.exe is the sidecar continuum.exe.
+    for name in ("continuum-gui.exe", "Continuum"):
         path = RELEASE / name
         if path.is_file():
             return path
@@ -160,7 +161,7 @@ def install_nsis(setup: Path) -> Path | None:
         base / "com.github.bosprimigenious.continuum",
         base / "continuum-gui",
     )
-    names = ("Continuum.exe", "continuum-gui.exe")
+    names = ("continuum-gui.exe",)
     for folder in folders:
         for name in names:
             path = folder / name

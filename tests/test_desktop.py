@@ -75,6 +75,7 @@ def test_windows_nsis_bundle_smokes_sidecar_json_and_current_user_install() -> N
     assert "LOCALAPPDATA" in smoke
     assert "Programs" in smoke
     assert "continuum-gui.exe" in smoke
+    assert 'names = ("Continuum.exe"' not in smoke
     assert "taskkill" in smoke
     assert "gui exited" in smoke or "start " in smoke
     sidecar_smoke = (ROOT / "scripts" / "smoke_sidecar.py").read_text(encoding="utf-8")
