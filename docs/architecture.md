@@ -24,7 +24,7 @@ worker threads.
 | Storage | stdlib SQLite, WAL, FTS5 trigram | Transactional and rebuildable without another service; short queries scan and large-corpus performance is unmeasured |
 | Agent interface | Official MCP Python SDK v2, stdio | Delegate protocol/version negotiation; do not hand-roll JSON-RPC or blindly echo versions |
 | Human interface | React + TypeScript + Vite over CLI JSON | Search/read UI; `continuum_history.gui.CliBridge` subprocesses `python -m continuum_history`. Browser e2e unverified |
-| Desktop shell | Tauri 2 + PyInstaller CLI sidecar | P6-a: unsigned macOS `.app` built locally. Windows NSIS not built here. Do not add Electron |
+| Desktop shell | Tauri 2 + PyInstaller CLI sidecar | P6-a: unsigned macOS `.app` built locally. Windows NSIS produced on GitHub `windows-latest` (start/query not run). Do not add Electron |
 | Checks | pytest / Ruff / strict mypy / GitHub Actions | One executable aggregate gate instead of manual green checkmarks |
 
 Do not add Rust to the core, an ORM, a vector database, cloud auth or a workflow engine now.
@@ -35,6 +35,138 @@ the desktop shell. Do not maintain Tauri and Electron implementations in paralle
 Primary references: [MCP SDK](https://github.com/modelcontextprotocol/python-sdk),
 [SQLite FTS5](https://www.sqlite.org/fts5.html), [uv projects](https://docs.astral.sh/uv/guides/projects/).
 Dependency versions are resolved in `uv.lock`, not copied from a tutorial.
+
+## Architecture decision 002: one core, multiple shells
+
+Status: accepted 2026-09-20.
+
+Continuum is a **local conversation-history index**, not a coding agent that edits
+repositories. How it ships still follows Grok / Codex (one runtime, many shells), not
+Cursor (VS Code fork + editor). The language inside the core stays Python (decision 001).
+
+### Which product line this is
+
+| Route | What it is | When Continuum uses it |
+| --- | --- | --- |
+| Core + CLI + thin desktop | One library does import/search/read; GUI is a window on that CLI | **Now** |
+| Editor extension | Same core; the editor hosts MCP or the CLI | After there are users |
+| Cursor-style IDE fork | Own Chromium + the VS Code tree | Not this product |
+
+Cursor's cost is an editor. Continuum's job is to index conversations the user pointed
+at, then answer CLI / MCP / a search window. Do not become an IDE to get `.app` and
+`.exe`.
+
+Grok Build keeps TUI, headless, and ACP on one agent runtime; desktop shells spawn that
+CLI instead of rewriting the agent. Codex CLI is a Rust workspace (`codex-core` plus
+TUI / exec / app-server). Continuum already has that **shape**: adapters and
+`HistoryStore` are the core; `continuum` CLI, MCP stdio, Vite, and Tauri are shells.
+Do not grow a second parser or search engine in the GUI.
+
+### Layers (shells change; the core does not)
+
+```text
+┌──────────────────────────────────────────────┐
+│ Shell: CLI / MCP / Vite / .app / .exe        │
+│ import, search, read, settings               │
+└──────────────────┬───────────────────────────┘
+                   │ CLI JSON or MCP stdio
+┌──────────────────▼───────────────────────────┐
+│ Core: Python continuum_history               │
+│ adapters, Snapshot v1, HistoryStore, FTS5    │
+└──────────────────┬───────────────────────────┘
+                   │
+┌──────────────────▼───────────────────────────┐
+│ Platform                                     │
+│ filesystem, SQLite, process spawn, OS dirs   │
+└──────────────────────────────────────────────┘
+```
+
+### Stack lock for this repository
+
+- **Core:** Python ≥3.12. Continuum does not run models, tools, sandboxes, or ACP.
+  Do not replace `HistoryStore` with a Rust/Go agent runtime.
+- **Desktop shell:** Tauri 2 + a PyInstaller `continuum` sidecar. macOS `.app` /
+  later `.dmg`; Windows NSIS installer and later a portable `.exe`.
+- **Protocol:** GUI talks CLI JSON; agents talk MCP stdio. Allowed commands stay
+  `import` / `sources` / `list` / `search` / `read`. No Continuum HTTP API.
+- **Frontend:** the existing React/Vite search UI. Do not add a second client store.
+- **Not Electron.** Electron is how you ship an IDE.
+
+A Cargo workspace (`crates/agent` + `crates/cli` + `crates/desktop`) is the right
+lock for a **coding-agent** product. That is a different repository and a different
+product name. Do not stand it up inside this tree or under `$HOME`. If that scaffold
+is wanted, name the path and the product first.
+
+Tauri's Rust crate is the desktop host, not a rewrite of the index.
+
+### Artifacts from one commit (target, not current evidence)
+
+```text
+dist/
+  continuum_history-*.whl   # PyPI / uv; console script continuum
+  Continuum.app / .dmg      # macOS desktop
+  Continuum-Setup.exe       # Windows installer
+  Continuum-portable.exe    # later
+```
+
+The CLI must exist even when the desktop shell exists. CI, SSH, and MCP hosts have
+no GUI. The desktop shell links the same CLI as a sidecar.
+
+Release matrix (target): `macos-14` (Developer ID + notarization before a public
+`.app`), `windows-2022` (Authenticode before a public `.exe`). Version and commit
+belong in the artifact; a laptop build is not a release.
+
+Today: GitHub prerelease wheel `v0.1.0a1`; local unsigned macOS `.app`; Windows
+`.exe` not built in this workspace; PyPI project `continuum-history` unpublished
+(OIDC `invalid-publisher` / 422). Operator steps: [publishing.md](publishing.md).
+
+### Platform differences that are core API, not last-mile polish
+
+- **Index path:** Continuum does not invent `~/.continuum` as the database. The
+  index is the `--db` the user passes. Desktop window settings, if added, use OS
+  conventions (`~/Library/Application Support/Continuum/` vs `%APPDATA%\Continuum\`),
+  never a hardcoded `/Users/...`. Config and cache stay separate from the index.
+- **Process:** spawn argv arrays (`Command` / `subprocess` list form). Do not
+  concatenate a shell string.
+- **Permissions:** a notarized `.app` hits macOS TCC for folder access; a CLI
+  started from a terminal often does not. Windows NSIS stays `currentUser`
+  (`%LOCALAPPDATA%`), not `C:\Program Files`, unless the user opts in.
+- **Signing:** public `.app` needs Developer ID + notarization + staple; public
+  `.exe` needs Authenticode. Unsigned builds are internal. Do not home-roll
+  “download and overwrite self” on Windows (file locks).
+- **Text:** treat files as UTF-8; preserve original newlines on rewrite. Honour
+  `HTTPS_PROXY` / `https_proxy` if the desktop ever fetches updates. WinHTTP
+  and environment variables are not the same thing.
+
+### Minimum desktop product (P6, still open)
+
+1. Sidecar CLI can import, search, and read; a failed import leaves the previous index.
+2. `continuum` / `continuum.exe` from the same wheel on Mac and Windows.
+3. Desktop screens: index/source, search, read, settings (index path; proxy later).
+4. Never write vendor databases.
+5. Auto-update is later; not a custom in-place overwrite.
+
+File trees as an editor, an embedded IDE terminal as the product, a plugin
+marketplace, and forking VS Code are out of scope.
+
+### Explicitly rejected
+
+- Forking VS Code / Cursor / Windsurf so the app “looks like Cursor”
+- A second agent or search implementation inside Tauri
+- Opening this work in `$HOME` instead of this repository
+- Installer skin, splash screens, or accounts before the sidecar can import the
+  synthetic snapshot on both OS families
+- Replacing decision 001 with a Rust agent because Grok did
+
+### Acceptance (do not substitute “the window opened”)
+
+- Same commit: Mac `.app` and Windows `.exe` can import `examples/synthetic.snapshot.json`,
+  search a known string, and read to the end
+- CLI and desktop share the CLI JSON contract and the same `--db` file
+- Unsigned artifacts may be used internally; public distribution requires
+  notarization / SmartScreen as applicable
+- `uv pip install 'continuum-history==0.1.0a1'` only after the pending publisher
+  succeeds. A GitHub wheel is not PyPI
 
 ## Current data contract
 
@@ -98,8 +230,10 @@ Do not describe the current exact filters as authorization.
 
 Validated transport: subprocess to the existing CLI. The child argv is
 `python -m continuum_history --db INDEX COMMAND...` (the same interface as the `continuum`
-console script). Success is JSON on stdout; domain failures are JSON `{"error": ...}` on
-stderr with exit 2. `continuum_history.gui` must not import `store` or `adapters`.
+console script). Piped / `--format json` success is JSON on stdout; a TTY may print text
+instead (`--format auto`). Domain failures are JSON `{"error": ...}` on stderr with exit 2.
+`--db` may be omitted when `CONTINUUM_DB` is set; that is still an explicit index, not
+home-directory discovery. A bare query (`continuum 数据库锁`) is implicit `search`. `continuum_history.gui` must not import `store` or `adapters`.
 Allowed GUI commands are `import`, `sources`, `list`, `search`, and `read` — never `serve`.
 The Vite `/__continuum` POST endpoint exists only while `npm run dev` is running and spawns
 that same CLI; Continuum does not ship an HTTP search server. Empty UI state must not create

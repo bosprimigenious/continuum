@@ -26,7 +26,7 @@ For different trust boundaries, launch separate processes with separate indexes.
 
 Do not commit PyPI tokens, `.pypirc`, or `UV_PUBLISH_TOKEN`. The preferred upload path is
 GitHub OIDC Trusted Publishing (short-lived credentials). A long-lived token in the
-maintainer environment is a fallback only.
+maintainer environment is a fallback only. Operator steps: [docs/publishing.md](docs/publishing.md).
 
 ## Reporting a vulnerability
 

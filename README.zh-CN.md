@@ -16,7 +16,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
 
-[English](README.md) · [架构](docs/architecture.md) · [贡献](CONTRIBUTING.md) · [安全](SECURITY.md) · [Release](https://github.com/bosprimigenious/continuum/releases)
+[English](README.md) · [架构](docs/architecture.md) · [发布](docs/publishing.md) · [贡献](CONTRIBUTING.md) · [安全](SECURITY.md) · [Release](https://github.com/bosprimigenious/continuum/releases)
 
 </div>
 
@@ -70,9 +70,9 @@ uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
 | 渠道 | 状态 |
 | --- | --- |
 | GitHub prerelease wheel `v0.1.0a1` | 有 |
-| PyPI 项目名 `continuum-history` | 未发布 |
+| PyPI 项目名 `continuum-history` | **未发布。** OIDC 422 `invalid-publisher`：pypi.org 上还没有 pending publisher。维护者步骤见 [publishing.md](docs/publishing.md) |
 | 已签名桌面安装包 | 未发布 |
-| Windows `.exe` | 未构建 |
+| Windows `.exe` | CI 打出未签名 NSIS（`Continuum_0.1.0-alpha.1_x64-setup.exe`）。启动/查询未在 Windows 上跑过 |
 
 从 GitHub Release 装：
 
@@ -86,15 +86,20 @@ continuum --help
 
 ## CLI
 
-所有命令都要显式 `--db`。那是 Continuum 的派生索引，不是厂商库。
+索引路径用 `--db` 或环境变量 `CONTINUUM_DB`。不扫家目录，也不猜厂商库位置。
 
 ```sh
 uv run continuum --db .continuum/demo.sqlite3 import examples/synthetic.snapshot.json
-uv run continuum --db .continuum/demo.sqlite3 sources
-uv run continuum --db .continuum/demo.sqlite3 list
-uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
-uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
+
+export CONTINUUM_DB=.continuum/demo.sqlite3
+uv run continuum search "数据库锁"
+uv run continuum "数据库锁"
+uv run continuum --format text search "数据库锁"
+uv run continuum read SESSION_ID --limit 2
 ```
+
+`--format auto`（默认）：管道里是 JSON（给 GUI/MCP/脚本），终端里是可读文本。
+`--format json` 永远 JSON。这不是 Grok/Codex 那种 agent REPL，只查你已经导入的索引。
 
 搜索是字面 Unicode（含短中文）。命中给 240 字 **preview**；全文只在 `read`。
 按来源 / 项目过滤是精确匹配，不是权限。
@@ -152,9 +157,16 @@ uv run continuum --db .continuum/demo.sqlite3 serve
 **连上客户端 = 它可以读完这个索引。** 项目过滤不是 ACL。不同信任范围用不同 `--db`。
 Agent 读到的正文仍可能被宿主发到模型服务。Continuum 自己没有上传通道。
 
+本机 Coding Agent 用中枢 skill `continuum-history`（`~/shared-ai-skills/continuum-history/`，软链到 Grok / Claude / Codex / Cursor 的 `skills/`）。按那份 `SKILL.md` 走 CLI 或已连接的 MCP，不要另写扫家目录的脚本。合成自检：
+
+```sh
+bash ~/shared-ai-skills/continuum-history/scripts/continuum_skill_check.sh
+```
+
 ## GUI
 
 界面只调 CLI 的 JSON，自己不解析厂商文件、不直接打开 SQLite。
+桌面壳是四屏工作台（会话列表、阅读、覆盖、设置），不是编辑器，也不是第二套 agent。
 
 **Vite 开发壳**（要 checkout，不是安装包）：
 
@@ -165,7 +177,7 @@ npm run dev
 ```
 
 **桌面**还是实验性质。本仓库可以打一份**未签名**的 macOS `.app`（PyInstaller 把 `continuum` CLI 冻成 sidecar）。
-没有公证、不进 git、也不是干净机器安装包。Windows `.exe` 这个工作区里还没有。
+没有公证、不进 git、也不是干净机器安装包。Windows NSIS 由 GitHub `windows-latest` 打出，本机 macOS 不能启动该 `.exe`。
 
 ```sh
 uv run --with pyinstaller python scripts/build_sidecar.py
@@ -184,7 +196,7 @@ pre-alpha。地基门禁绿只说明 **这份 checkout** 能过，不说明产�
 | 快照 v1 导入、字面搜索、分页、出处 | Claude Code / Codex 适配器 |
 | Cursor `state.vscdb` / `cursorDiskKV`（合成夹具） | 真实 Cursor 宿主、JSONL、sidebar DB |
 | CLI + 四只读 MCP，共用一个核心 | 自动发现、后台增量刷新 |
-| GUI 走 CLI JSON；Vite；本机未签名 macOS `.app` | 浏览器 e2e、已签名安装包、Windows `.exe` |
+| GUI 走 CLI JSON；Vite；本机未签名 macOS `.app`；CI 有 Windows NSIS 工件 | 浏览器 e2e、已签名安装包、Windows 启动/查询验收 |
 | GitHub `v0.1.0a1` wheel；Linux / macOS / Windows CI | PyPI `continuum-history` |
 | 回滚、Unicode、WAL 边车、stdio 测试 | 语义搜索、附件全文、云同步 |
 
@@ -193,15 +205,21 @@ GUI 在真实浏览器或桌面点选路径走通之前报 **NOT READY**。
 
 ## 怎么拼起来的
 
+一份核心，多套壳。不是 IDE。
+
 ```text
-adapters  →  Snapshot v1  →  HistoryStore (SQLite + FTS5)
-                                  │
-                     CLI JSON ────┼──── MCP stdio（只读）
-                                  │
-                     GUI / Tauri ─┘  （spawn continuum，没有第二套 API）
+┌──────────────────────────────────────────────┐
+│ 壳：CLI / MCP / Vite / .app / .exe           │
+└──────────────────┬───────────────────────────┘
+                   │ CLI JSON 或 MCP stdio
+┌──────────────────▼───────────────────────────┐
+│ 核心：adapters → Snapshot v1 → HistoryStore  │
+└──────────────────────────────────────────────┘
 ```
 
-一个 Python 核心。客户端不要再长一个搜索引擎。
+这是 Grok / Codex 的发行形态（runtime + 壳），不是 Cursor 的形态（VS Code 分叉）。
+桌面 `.app` / `.exe` 包的是同一份 `continuum` CLI。不要为了 GUI 去 fork 编辑器。
+
 契约、否决过的方案、失败导入该怎样，见 [docs/architecture.md](docs/architecture.md)。
 
 ## 参与开发
@@ -235,6 +253,12 @@ CI 在 Ubuntu、macOS、Windows 上跑同一套门禁。
 **为什么不能 `pip install continuum`？**
 PyPI 上已有 [continuum](https://pypi.org/project/continuum/)，是 PyTorch 持续学习库。
 本项目将来的发行名是 `continuum-history`。现在用 GitHub wheel 或源码。
+
+**PyPI 上传为什么失败？**
+GitHub OIDC 已经打到 PyPI（run `35454466719`），返回 422 `invalid-publisher`。
+token 有效；pypi.org 上没有匹配 `continuum-history` / `bosprimigenious/continuum` /
+`publish.yml` / environment `pypi` 的 pending publisher。
+这是账号配置，不是版本号问题。步骤见 [docs/publishing.md](docs/publishing.md)。
 
 **会不会把对话传到网上？**
 运行时没有遥测、没有托管同步、没有模型 API。`uv` / `npm` / `cargo` 安装构建时仍会访问包仓库。

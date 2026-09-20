@@ -9,7 +9,13 @@ repository; do not change global agent configs or other repositories while worki
 - Preserve source data. All database writes belong to the explicitly selected derived index.
 - Native Cursor `state.vscdb` read-only import exists for synthetic fixtures. Live Cursor
   hosts, other Cursor formats and other tools are unverified. A CLI-backed GUI session and
-  Vite shell exist; browser e2e and Tauri are unverified. Update status with evidence, not intent.
+  Vite shell exist; browser e2e is unverified. P6-a Tauri + sidecar exists as an unsigned
+  local macOS `.app`; Windows `.exe` and notarization are unverified. Update status with
+  evidence, not intent.
+- Product shape (docs/architecture.md decision 002): one Python core, many shells
+  (CLI / MCP / thin Tauri). Do not fork VS Code, do not add Electron, do not rewrite
+  the core as a Rust/Go coding agent, do not put a second search engine in the GUI.
+  P6-b workbench panes are navigator / transcript / coverage / settings.
 - Keep the core independent of MCP and GUI; do not hand-roll protocol negotiation.
 - TDD: add a behavior-level failing test, implement, refactor, rerun the aggregate gate.
 - Scope changes and schema migrations require explicit rationale and rollback instructions.

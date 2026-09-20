@@ -1,5 +1,12 @@
 name: Publish CLI to PyPI
 
+# Requires a PyPI pending publisher that matches these claims exactly:
+#   project=continuum-history owner=bosprimigenious repo=continuum
+#   workflow=publish.yml environment=pypi
+# Register at https://pypi.org/manage/account/publishing/ before dispatch.
+# 422 invalid-publisher is a PyPI config miss, not a reason to bump 0.1.0a1.
+# See docs/publishing.md.
+
 on:
   release:
     types: [published]
@@ -52,3 +59,7 @@ jobs:
           name: dist
           path: dist/
       - run: uv publish --trusted-publishing always
+      - name: Explain missing pending publisher
+        if: failure()
+        run: |
+          echo "::error::PyPI OIDC 422 invalid-publisher. Register a pending publisher at https://pypi.org/manage/account/publishing/ with project=continuum-history owner=bosprimigenious repository=continuum workflow=publish.yml environment=pypi. Do not bump 0.1.0a1 to retry."

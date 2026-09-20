@@ -22,6 +22,8 @@ def target_triple() -> str:
         return "x86_64-apple-darwin"
     if system == "Windows" and machine in {"amd64", "x86_64"}:
         return "x86_64-pc-windows-msvc"
+    if system == "Windows" and machine in {"arm64", "aarch64"}:
+        return "aarch64-pc-windows-msvc"
     if system == "Linux" and machine in {"x86_64", "amd64"}:
         return "x86_64-unknown-linux-gnu"
     raise SystemExit(f"unsupported sidecar host: {system} {machine}")

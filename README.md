@@ -16,7 +16,7 @@ Never rewrite a vendor database.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
 
-[中文](README.zh-CN.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releases](https://github.com/bosprimigenious/continuum/releases)
+[中文](README.zh-CN.md) · [Architecture](docs/architecture.md) · [Publishing](docs/publishing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releases](https://github.com/bosprimigenious/continuum/releases)
 
 </div>
 
@@ -75,9 +75,9 @@ The demo data is hand-written synthetic JSON. There are no private chats in this
 | Channel | Status |
 | --- | --- |
 | GitHub prerelease wheel `v0.1.0a1` | Available |
-| PyPI project `continuum-history` | Not published |
+| PyPI project `continuum-history` | **Not published.** OIDC 422 `invalid-publisher`: no pending publisher on pypi.org. Maintainer step: [publishing.md](docs/publishing.md) |
 | Signed desktop installer | Not published |
-| Windows `.exe` | Not built |
+| Windows `.exe` | CI produced unsigned NSIS (`Continuum_0.1.0-alpha.1_x64-setup.exe`). Start/query not run on Windows |
 
 From the GitHub release:
 
@@ -92,16 +92,22 @@ From a checkout, use `uv run continuum …` as in [Try it](#try-it). The console
 
 ## CLI
 
-All commands take an explicit `--db` path. That file is Continuum's index, never a vendor DB.
+The index is an explicit `--db` path or `CONTINUUM_DB`. Continuum does not scan your home
+directory or invent a default vendor path.
 
 ```sh
-# Normalized snapshot v1 (default adapter)
 uv run continuum --db .continuum/demo.sqlite3 import examples/synthetic.snapshot.json
-uv run continuum --db .continuum/demo.sqlite3 sources
-uv run continuum --db .continuum/demo.sqlite3 list
-uv run continuum --db .continuum/demo.sqlite3 search "数据库锁"
-uv run continuum --db .continuum/demo.sqlite3 read SESSION_ID --limit 2
+
+export CONTINUUM_DB=.continuum/demo.sqlite3
+uv run continuum search "数据库锁"
+uv run continuum "数据库锁"
+uv run continuum --format text search "数据库锁"
+uv run continuum read SESSION_ID --limit 2
 ```
+
+`--format auto` (default): JSON when piped (GUI/MCP/scripts), text in a terminal.
+`--format json` always JSON. This is not an agent REPL like Grok/Codex; it searches
+an index you already imported.
 
 Search is literal Unicode (including short Chinese). Results return a 240-character **preview**;
 `read` returns full event text. Filters on source/project are exact match, not permissions.
@@ -162,10 +168,20 @@ stdio against the Python SDK is tested. Cursor / Claude Code / Codex **hosts** a
 Use one index per trust boundary. Text an agent reads may still be sent to that agent's
 model provider. Continuum has no upload service of its own.
 
+Local coding agents should use the `continuum-history` skill
+(`~/shared-ai-skills/continuum-history/`, symlinked into Grok / Claude / Codex / Cursor
+`skills/`). Follow that `SKILL.md` (CLI or an already-connected MCP). Do not write a
+home-directory scanner. Synthetic check:
+
+```sh
+bash ~/shared-ai-skills/continuum-history/scripts/continuum_skill_check.sh
+```
+
 ## GUI
 
 The UI talks to the same CLI JSON interface. It does not parse vendor files or open SQLite
-itself.
+itself. The desktop shell is a four-pane workbench (session list, read, coverage, settings),
+not an editor and not a second agent.
 
 **Vite shell** (checkout, not a downloadable app):
 
@@ -177,7 +193,8 @@ npm run dev
 
 **Desktop** is experimental. This repo can build an **unsigned** macOS `.app` with a
 PyInstaller sidecar of the `continuum` CLI. That artifact is not notarized, not shipped
-in git, and not a clean-machine install. Windows `.exe` is not produced in this tree.
+in git, and not a clean-machine install. Windows NSIS is produced on GitHub `windows-latest`;
+this macOS checkout cannot launch that `.exe`.
 
 ```sh
 uv run --with pyinstaller python scripts/build_sidecar.py
@@ -197,7 +214,7 @@ Pre-alpha. A green foundation gate means the **checkout** works, not that the pr
 | Snapshot v1 import, literal search, pagination, source refs | Claude Code / Codex adapters |
 | Cursor `state.vscdb` / `cursorDiskKV` (synthetic fixtures) | Live Cursor host, Cursor JSONL, sidebar DBs |
 | CLI + four read-only MCP tools on one core | Auto-discovery, background refresh |
-| GUI session via CLI JSON; Vite dev; unsigned local macOS `.app` | Browser e2e, signed/notarized installer, Windows `.exe` |
+| GUI session via CLI JSON; Vite dev; unsigned local macOS `.app`; CI NSIS artifact | Browser e2e, signed installer, Windows start/query acceptance |
 | GitHub `v0.1.0a1` wheel; CI on Linux / macOS / Windows | PyPI `continuum-history` |
 | Rollback, Unicode, WAL sidecar, stdio tests | Semantic search, attachments as full text, cloud sync |
 
@@ -206,15 +223,22 @@ GUI status: **NOT READY** until a real browser (or desktop) path is exercised en
 
 ## How it is put together
 
+One Python core. Several shells. Not an IDE.
+
 ```text
-adapters  →  Snapshot v1  →  HistoryStore (SQLite + FTS5)
-                                  │
-                     CLI JSON ────┼──── MCP stdio (read-only)
-                                  │
-                     GUI / Tauri ─┘  (spawn continuum, no extra API)
+┌──────────────────────────────────────────────┐
+│ Shell: CLI / MCP / Vite / .app / .exe        │
+└──────────────────┬───────────────────────────┘
+                   │ CLI JSON or MCP stdio
+┌──────────────────▼───────────────────────────┐
+│ Core: adapters → Snapshot v1 → HistoryStore  │
+└──────────────────────────────────────────────┘
 ```
 
-One Python core. Clients do not grow a second search engine.
+This is the Grok / Codex shipping shape (runtime + shells), not the Cursor shape
+(VS Code fork). The desktop `.app` / `.exe` wrap the same `continuum` CLI. Do not
+fork an editor to get a GUI.
+
 See [docs/architecture.md](docs/architecture.md) for contracts, rejected alternatives,
 and how a failed import is supposed to behave.
 
@@ -253,6 +277,12 @@ Details: [SECURITY.md](SECURITY.md).
 PyPI already has [continuum](https://pypi.org/project/continuum/), a PyTorch continual-learning
 library. This project will publish as `continuum-history`. Until then, use the GitHub wheel
 or a checkout.
+
+**Why did the PyPI upload fail?**
+GitHub OIDC reached PyPI (run `35454466719`) and got 422 `invalid-publisher`.
+The token is valid; pypi.org has no pending publisher for `continuum-history` /
+`bosprimigenious/continuum` / `publish.yml` / environment `pypi`.
+That is an account setting, not a version bump. Steps: [docs/publishing.md](docs/publishing.md).
 
 **Does Continuum phone home?**
 No runtime telemetry, hosted sync, or model API. `uv` / `npm` / `cargo` still talk to package

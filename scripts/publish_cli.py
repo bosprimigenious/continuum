@@ -15,7 +15,7 @@ if not os.environ.get("UV_PUBLISH_TOKEN"):
     print(
         "NOT READY: UV_PUBLISH_TOKEN is unset; refusing local upload. "
         "Preferred path: GitHub release → workflow publish.yml (OIDC). "
-        "See docs/development.md.",
+        "See docs/publishing.md.",
         file=sys.stderr,
     )
     raise SystemExit(2)

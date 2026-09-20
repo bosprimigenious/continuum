@@ -2,7 +2,9 @@
 
 Thanks for helping make local conversation history accessible and trustworthy.
 
-Start with [the development handbook](docs/development.md) and [architecture](docs/architecture.md).
+Start with [the development handbook](docs/development.md) and [architecture](docs/architecture.md)
+(decision 002: one Python core, many shells; do not fork VS Code).
+PyPI operator steps: [publishing.md](docs/publishing.md).
 For substantial changes, discuss one concrete user behavior in an issue before adding scope.
 Small fixes and tests are welcome directly as pull requests.
 

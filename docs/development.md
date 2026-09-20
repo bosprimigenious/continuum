@@ -36,12 +36,14 @@ without importing the source checkout. Tests must never discover the developer's
 用户于 2026-09-18 明确要求以 CLI 为底座开始 GUI，**P5-a/P5-b 已开工**。
 用户于 2026-09-20 覆盖「不要开 P6」，要求 macOS `.app` / Windows `.exe` 与 CLI PyPI。
 **P6-a 已开工**（见下文）：本机打出未签名 `Continuum.app`；Windows `.exe` 未在本机构建。
+**P6-b 已开工**：四屏工作台 + 设置里的代理 env；不是 P6 整行。
 不要为 GUI 另写解析/搜索或 Continuum HTTP API，不要加 Electron。
 2026-09-19 调研结论：产品架构不改；发布架构改为 **GitHub OIDC Trusted Publishing**
 （见下文）。两条线并行、互不替代：无授权则 P2 保持 BLOCKED；无 PyPI pending publisher
 则 CLI 包不能上 PyPI（2026-09-20 OIDC 422 已证实）。不要空升 `0.1.0` / `0.1.0a2`。
 发现竞品可以借鉴实现，
 不因此自行推翻已确定范围、换技术栈或增加另一份产品设计稿。
+Grok/Codex 的「核心 + 多壳」可以吸收；它们的 Rust agent runtime 不能用来替换本仓库的 Python 核心。
 
 - 先固定受支持的格式、版本与合成样本，写出因为行为缺失而失败的测试。
 - 再实现适配器与共享服务接线；命中原文、完整分页、错误可见、重复采集幂等都要验证。
@@ -435,6 +437,96 @@ onefile `continuum` sidecar）、`gui/src/bridge.ts` 在 Tauri 下走 sidecar、
 **状态：P6-a 本机 unsigned macOS `.app` 已打出；P6 整行未过；GUI NOT READY；
 Windows `.exe` 未产出；完整产品 NOT READY。**
 
+### P6-b：四屏工作台（2026-09-20，按决策 002）
+
+范围：桌面壳改成 navigator / transcript / coverage / settings；设置里可写
+`HTTPS_PROXY`，经 argv spawn 的 env 传递，不拼进 shell 字符串。配置目录按 OS
+约定计算，空态不写盘、不扫家目录。不改派生 schema，不加 Continuum HTTP，
+不 fork 编辑器，不把核心改成 Rust agent。
+
+**Red：** `uv run pytest tests/test_workbench.py tests/test_desktop.py -q`
+先是 `ModuleNotFoundError: continuum_history.gui.paths`；实现后
+`scripts/publication_check.py` 因测试里的 Windows 用户目录样例误报 BLOCKED
+（检查脚本自己的路径，不是产品写死家目录）。
+
+**Green：** `uv run pytest tests/test_workbench.py tests/test_desktop.py tests/test_gui.py -q`
+→ `22 passed`。`cd gui && npm run build` 退出 0。
+
+**聚合门禁** `uv run python scripts/check.py`（亲自跑，macOS / Python 3.12.13）：
+
+| 检查 | 实际输出 |
+| --- | --- |
+| Ruff format / lint | `39 files already formatted` / `All checks passed!` |
+| mypy | `Success: no issues found in 14 source files` |
+| pytest | `94 passed`；总覆盖率 `92.54%`，门槛仍为 `85%` |
+| 发布卫生检查 | `PASS: basic publication hygiene (78 files)` |
+| wheel / sdist | `continuum_history-0.1.0a1` |
+| 隔离 wheel 安装 | `PASS: installed wheel 0.1.0a1` |
+| 聚合门禁 | `PASS: foundation gate (native adapters, GUI and real hosts are NOT verified)` |
+
+未验证：浏览器/Tauri 点选、窄屏实机、用新图标重打 `.app`、Windows `.exe`、
+签名/公证、PyPI pending publisher、P2 真源。
+
+**状态：P6-b 合成工作台契约已落地；P6 整行未过；GUI NOT READY。**
+
+### CLI 直接查询（2026-09-20）
+
+范围：`--db` 可改用 `CONTINUUM_DB`；无子命令的第一个位置参数视为 `search`；
+`--format text` 给人看，管道默认仍 JSON。不扫家目录，不加 Grok/Codex 适配器，
+不是 agent TUI。
+
+**Red：** `uv run pytest tests/test_cli_query.py -q` → `4 failed`（缺 env、隐式 search、text）。
+
+**Green：** 同文件后为 8 passed。终端实跑 `continuum --format text "数据库锁"` 命中合成夹具标题与 preview。
+
+**聚合门禁** `uv run python scripts/check.py`：`102 passed`，覆盖率 `92.60%`，
+`PASS: foundation gate`。中间一次卫生检查因手册里的 Windows 用户目录样例误报，已改措辞后重跑通过。
+
+### GUI 页面按 grok-app 工作台改（2026-09-20）
+
+范围：Vite 壳改成左侧会话、中间阅读、底部搜索框、设置浮层、覆盖可选；导入成功后自动
+`list`；search/list/read 每页 20。仍走 `/__continuum` CLI JSON，不是 HTTP API，不是
+agent。空态不写 `--db`、不扫家目录。
+
+**Green：** `cd gui && npm run build` 退出 0；
+`uv run pytest tests/test_desktop.py tests/test_workbench.py tests/test_gui.py -q`
+→ `22 passed`。`npm run dev` 后对 `http://localhost:5173/__continuum` 用合成快照
+import / sources / list / search「数据库锁」/ read 均 HTTP 200。WKWebView 打开页面：
+空态设置浮层 → 导入 → 侧栏出现会话 → 点开会话 3 条事件 → 底部搜索命中 preview。
+
+未验证：Tauri `.app` 窗口点选、CI 浏览器 e2e、窄屏实机、签名安装包。
+
+**状态：本机 Vite 合成路径可走通；P5 浏览器 e2e 未进 CI；GUI NOT READY。**
+
+### Windows NSIS `.exe`（2026-09-20）
+
+范围：`desktop.yml` 在 `windows-latest` 打 NSIS；sidecar 与 GUI 桥强制 `--format json`
+（避免 Windows 控制台被当成 TTY 打出文本）；安装包 `currentUser` + 嵌入 WebView2
+bootstrapper。`scripts/smoke_desktop.py` 在 Windows 上：打包 sidecar 查询合成夹具、
+静默安装、启动 `Continuum.exe`。本机是 macOS，不能执行 PE。
+
+**Green（origin/main，workflow_dispatch `35486634857`）：**
+Windows 作业 7m22s 成功。PyInstaller 写出
+`continuum-x86_64-pc-windows-msvc.exe`；`npx tauri build` 写出
+`gui/src-tauri/target/release/continuum-gui.exe` 与
+`bundle/nsis/Continuum_0.1.0-alpha.1_x64-setup.exe`（本机下载 25M）。
+该 run **没有**跑 sidecar 查询，也 **没有**启动 GUI。
+
+**本工作区：** `uv run pytest tests/test_desktop.py tests/test_gui.py tests/test_workbench.py -q`
+→ `23 passed`。新的 `smoke_sidecar` / `smoke_desktop` 步骤还在未推送的 `desktop.yml` 里。
+
+未验证：Windows 上双击安装包、窗口点选、sidecar 接入、搜索「数据库锁」、签名、
+干净机器、ARM Windows。当前 dirty tree（grok-app 页面、`--format json`）不在
+`35486634857` 的安装包里。
+
+**状态：Windows NSIS 能在 CI 打出；启动 / 接入 / 查询 NOT READY。**
+
+### Skill 合成路径（2026-09-20）
+
+中枢 `~/shared-ai-skills/continuum-history/`。探测会跑 `continuum --help`；合成自检
+`scripts/continuum_skill_check.sh` 走 import / sources / search / 隐式 search / read，
+不扫家目录。Grok `inspect` 列出 `continuum-history`。里程碑仍只写在本手册。
+
 ### 后续阶段（P4 与 P6 整行）
 
 | 顺序 / 依赖 | 有界交付 | 完成标准 |
@@ -506,8 +598,9 @@ facades. Do not copy local paths, credentials, raw user messages or personal age
 ### 选定的架构（推荐，不是对照表）
 
 产品架构维持 [architecture.md](architecture.md) 已接受的决定：一个 Python 核心、CLI JSON、
-MCP stdio、GUI 只做 CLI 子进程；不引入 Continuum HTTP、不并行 Electron、不在 P5 浏览器
-端到端之前做 Tauri。
+MCP stdio、GUI 只做 CLI 子进程；不引入 Continuum HTTP、不并行 Electron。
+2026-09-20 用户覆盖「P5 e2e 之后才做 Tauri」，P6-a 已开工。决策 002：走 Grok/Codex
+「核心 + 多壳」，不要做成 Cursor 式 VS Code 分叉；也不要把本仓库改写成 Rust agent。
 
 发布架构：**更强的工程选择是 GitHub Actions OIDC Trusted Publishing**，工作流
 `.github/workflows/publish.yml`。build 与 publish 分 job，只有 publish 有 `id-token: write`，
@@ -565,6 +658,23 @@ Caused by: ... 422 ... "invalid-publisher"
 OIDC claims 已匹配仓库 `bosprimigenious/continuum`、workflow `publish.yml`、environment `pypi`。
 阻塞在 pypi.org 尚未登记 pending publisher。`https://pypi.org/pypi/continuum-history/json`
 仍 404。`UV_PUBLISH_TOKEN` 仍 unset。不要为重试而 bump `0.1.0a1`。
+操作步骤锁在 [publishing.md](publishing.md)；本机检查：`uv run python scripts/pypi_status.py`。
+
+### 2026-09-20 产品形态调研（Grok / Codex / Cursor）
+
+对照公开材料（Grok Build 桌面壳 spawn `grok agent stdio`；Codex CLI 是 `codex-core` +
+TUI/exec/app-server；Cursor 是 VS Code 分叉 + Electron），结论写进
+[architecture.md](architecture.md) **决策 002**，不是另起一份产品计划：
+
+- **推荐（对本产品既是更安全的默认，也是更强的工程选择）：** 保持 Python 核心 +
+  CLI + MCP + 薄 Tauri 壳。`.app` / `.exe` 是壳，不是第二套 agent。
+- **不要做：** fork VS Code / Electron IDE；CLI 一套搜索、桌面再写一套；把本仓库
+  改成 `crates/agent` + ACP 编码智能体。
+- **Rust/Go agent workspace** 适合编码智能体产品。Continuum 不是那种产品。若要立
+  那个脚手架，必须另给仓库路径和产品名，不要在 `$HOME` 或本仓库空转。
+
+桌面图标从扁平色块 C 换成锻金开环 C（内层时间线螺纹），源文件
+`gui/src-tauri/icons/icon.png`。这不是产品 READY。
 
 ### 回滚
 

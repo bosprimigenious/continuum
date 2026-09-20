@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,14 +22,22 @@ class CliBridge:
         self.argv = argv
         self.timeout = timeout
 
-    def run(self, *args: str) -> dict[str, Any]:
+    def run(self, *args: str, extra_env: dict[str, str] | None = None) -> dict[str, Any]:
+        env = os.environ.copy()
+        if extra_env:
+            env.update(extra_env)
+        spawn: dict[str, Any] = {}
+        if os.name == "nt":
+            spawn["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         result = subprocess.run(
-            [*self.argv, "--db", str(self.index), *args],
+            [*self.argv, "--db", str(self.index), "--format", "json", *args],
             capture_output=True,
             text=True,
             encoding="utf-8",
             timeout=self.timeout,
             check=False,
+            env=env,
+            **spawn,
         )
         if result.returncode:
             raise HistoryError(_error_message(result.stderr))

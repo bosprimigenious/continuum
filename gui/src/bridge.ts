@@ -2,6 +2,21 @@ export type CliPayload = Record<string, unknown>;
 
 const ALLOWED = new Set(["import", "sources", "list", "search", "read"]);
 
+export type BridgeOptions = { proxy?: string };
+
+function proxyEnv(proxy?: string): Record<string, string> | undefined {
+  const value = proxy?.trim();
+  if (!value) {
+    return undefined;
+  }
+  return {
+    HTTPS_PROXY: value,
+    https_proxy: value,
+    HTTP_PROXY: value,
+    http_proxy: value,
+  };
+}
+
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -22,14 +37,15 @@ async function runSidecar(
   db: string,
   command: string,
   args: string[],
+  options: BridgeOptions = {},
 ): Promise<CliPayload> {
   const { Command } = await import("@tauri-apps/plugin-shell");
-  const output = await Command.sidecar("binaries/continuum", [
-    "--db",
-    db,
-    command,
-    ...args,
-  ]).execute();
+  const env = proxyEnv(options.proxy);
+  const output = await Command.sidecar(
+    "binaries/continuum",
+    ["--db", db, "--format", "json", command, ...args],
+    env ? { env } : undefined,
+  ).execute();
   if (output.code !== 0) {
     throw new Error(parseCliError(output.stderr));
   }
@@ -41,11 +57,12 @@ async function runDevMiddleware(
   db: string,
   command: string,
   args: string[],
+  options: BridgeOptions = {},
 ): Promise<CliPayload> {
   const response = await fetch("/__continuum", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ db, command, args }),
+    body: JSON.stringify({ db, command, args, proxy: options.proxy ?? "" }),
   });
   const payload = (await response.json()) as CliPayload;
   if (!response.ok) {
@@ -58,12 +75,13 @@ export async function runContinuum(
   db: string,
   command: "import" | "sources" | "list" | "search" | "read",
   args: string[] = [],
+  options: BridgeOptions = {},
 ): Promise<CliPayload> {
   if (!db.trim() || !ALLOWED.has(command) || args.includes("serve")) {
     throw new Error("invalid_import: explicit db and allowed command required");
   }
   if (isTauri()) {
-    return runSidecar(db.trim(), command, args);
+    return runSidecar(db.trim(), command, args, options);
   }
-  return runDevMiddleware(db.trim(), command, args);
+  return runDevMiddleware(db.trim(), command, args, options);
 }

@@ -97,6 +97,7 @@ def test_import_search_paginated_read_goes_through_cli(
     assert rest["next_cursor"] is None
     assert any("-m" in cmd and "continuum_history" in cmd for cmd in recorded)
     assert all("HistoryStore" not in part for cmd in recorded for part in cmd)
+    assert any("--format" in cmd and "json" in cmd for cmd in recorded)
 
 
 def test_long_cjk_is_truncated_in_search_and_complete_in_read(tmp_path: Path) -> None:
@@ -293,9 +294,10 @@ def test_second_source_coverage_is_listed_not_hidden(tmp_path: Path) -> None:
 def test_gui_package_does_not_import_store_or_adapters() -> None:
     import continuum_history.gui as gui
     import continuum_history.gui.bridge as bridge
+    import continuum_history.gui.paths as paths
     import continuum_history.gui.session as session
 
-    for module in (gui, bridge, session):
+    for module in (gui, bridge, paths, session):
         source = Path(module.__file__).read_text(encoding="utf-8")
         assert "HistoryStore" not in source
         assert "load_snapshot" not in source

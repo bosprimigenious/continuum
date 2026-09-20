@@ -8,6 +8,7 @@ type CliRequest = {
   db?: string;
   command?: string;
   args?: string[];
+  proxy?: string;
 };
 
 export function continuumCliPlugin(repoRoot: string): Plugin {
@@ -57,10 +58,18 @@ function runCli(repoRoot: string, body: CliRequest, res: ServerResponse): void {
     sendJson(res, 400, { error: "invalid_import: explicit db and allowed command required" });
     return;
   }
+  const env = { ...process.env };
+  const proxy = body.proxy?.trim() ?? "";
+  if (proxy) {
+    env.HTTPS_PROXY = proxy;
+    env.https_proxy = proxy;
+    env.HTTP_PROXY = proxy;
+    env.http_proxy = proxy;
+  }
   const child = spawn(
     "uv",
-    ["run", "python", "-m", "continuum_history", "--db", db, command, ...args],
-    { cwd: repoRoot, env: process.env },
+    ["run", "python", "-m", "continuum_history", "--db", db, "--format", "json", command, ...args],
+    { cwd: repoRoot, env, shell: false },
   );
   let stdout = "";
   let stderr = "";
